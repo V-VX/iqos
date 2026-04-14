@@ -23,6 +23,9 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
+/// BLE-specific IQOS session and metadata logic.
+#[cfg(feature = "btleplug-support")]
+pub mod ble;
 /// Error types and the crate-wide `Result` alias.
 pub mod error;
 /// Protocol-layer command, response, and domain types.
@@ -34,10 +37,13 @@ pub mod transports;
 
 pub use error::{Error, Result};
 pub use protocol::{
-    BrightnessLevel, CommandFrame, DeviceCapability, DeviceModel, FirmwareKind, FirmwareVersion,
-    ResponseFrame,
+    BrightnessLevel, CommandFrame, DeviceCapability, DeviceInfo, DeviceModel, FirmwareKind,
+    FirmwareVersion, ResponseFrame,
 };
 pub use transport::{Transport, TransportKind};
+
+#[cfg(feature = "btleplug-support")]
+pub use ble::IqosBle;
 
 /// Library facade placeholder for future extracted IQOS session/device API.
 ///
