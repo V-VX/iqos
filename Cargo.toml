@@ -1,0 +1,28 @@
+[package]
+name = "iqos"
+version = "0.1.0"
+edition = "2024"
+authors = ["VVX Club", "VVX Supp"]
+description = "Rust library for controlling IQOS devices over BLE today and USB in the future"
+license = "GPL-3.0"
+readme = "README.md"
+keywords = ["iqos", "ble", "bluetooth", "usb", "hardware"]
+categories = ["hardware-support", "asynchronous"]
+rust-version = "1.85"
+
+[lib]
+name = "iqos"
+path = "src/lib.rs"
+
+[features]
+default = []
+btleplug-support = ["dep:btleplug"]
+usb-support = []
+
+[dependencies]
+async-trait = "0.1"
+btleplug = { version = "0.11.8", optional = true }
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
