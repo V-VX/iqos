@@ -1,4 +1,4 @@
-# iqos
+# IQOS
 
 Rust library for controlling IQOS devices over BLE, with a clean architectural path for future USB transport support.
 
