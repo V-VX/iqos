@@ -1,0 +1,4 @@
+too-many-arguments-threshold = 8
+type-complexity-threshold = 300
+cognitive-complexity-threshold = 20
+doc-valid-idents = ["IQOS", "BLE", "USB", "GATT", "UUID", "btleplug"]

@@ -8,8 +8,6 @@
 # Local harness / agent coordination artifacts
 /AGENTS.md
 /docs/plans/
-/rustfmt.toml
-/clippy.toml
 /.github/copilot-instructions.md
 
 # Nested reference repo artifacts that should not leak into the root project
