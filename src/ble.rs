@@ -5,6 +5,7 @@
 //! loading, characteristic discovery, and the low-level request/response path
 //! built around the SCP control characteristic.
 
+use async_trait::async_trait;
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
 use btleplug::platform::Peripheral;
 use futures::StreamExt;
@@ -17,6 +18,7 @@ use crate::{
         SCP_CONTROL_CHARACTERISTIC_UUID, SERIAL_NUMBER_CHAR_UUID_PREFIX,
         SOFTWARE_REVISION_CHAR_UUID_PREFIX,
     },
+    transport::{Transport, TransportKind},
 };
 
 /// BLE session around a connected IQOS peripheral.
@@ -122,6 +124,21 @@ impl IqosBle {
             .await
             .map(|notification| notification.value)
             .ok_or_else(|| Error::Transport("no BLE response notification received".to_string()))
+    }
+}
+
+#[async_trait]
+impl Transport for IqosBle {
+    fn kind(&self) -> TransportKind {
+        TransportKind::Ble
+    }
+
+    async fn request(&self, command: &[u8]) -> Result<Vec<u8>> {
+        Self::request(self, command).await
+    }
+
+    async fn send(&self, command: &[u8]) -> Result<()> {
+        Self::send(self, command).await
     }
 }
 

@@ -101,6 +101,13 @@ mod tests {
     }
 
     #[test]
+    fn rejects_short_firmware_response() {
+        let result = FirmwareVersion::from_response(&[0x00, 0xC0, 0x88, 0x00], FirmwareKind::Stick);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn keeps_firmware_commands_stable() {
         assert_eq!(LOAD_STICK_FIRMWARE_VERSION_COMMAND, [0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00]);
         assert_eq!(

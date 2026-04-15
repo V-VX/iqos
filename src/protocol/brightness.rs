@@ -6,14 +6,14 @@ use crate::{Error, Result};
 pub const LOAD_BRIGHTNESS_COMMAND: [u8; 5] = [0x00, 0xC0, 0x02, 0x23, 0xC3];
 
 /// Command sequence used to switch brightness to `High`.
-pub const SET_BRIGHTNESS_HIGH_COMMANDS: [&[u8]; 3] = [
+pub(crate) const SET_BRIGHTNESS_HIGH_COMMANDS: [&[u8]; 3] = [
     &[0x00, 0xC0, 0x46, 0x23, 0x64, 0x00, 0x00, 0x00, 0x4F],
     &[0x00, 0xC0, 0x02, 0x23, 0xC3],
     &[0x00, 0xC9, 0x44, 0x24, 0x64, 0x00, 0x00, 0x00, 0x34],
 ];
 
 /// Command sequence used to switch brightness to `Low`.
-pub const SET_BRIGHTNESS_LOW_COMMANDS: [&[u8]; 3] = [
+pub(crate) const SET_BRIGHTNESS_LOW_COMMANDS: [&[u8]; 3] = [
     &[0x00, 0xC0, 0x46, 0x23, 0x1E, 0x00, 0x00, 0x00, 0xE1],
     &[0x00, 0xC0, 0x02, 0x23, 0xC3],
     &[0x00, 0xC9, 0x44, 0x24, 0x1E, 0x00, 0x00, 0x00, 0x9A],
@@ -120,6 +120,18 @@ mod tests {
     }
 
     #[test]
+    fn rejects_unknown_brightness_flag() {
+        let error = BrightnessLevel::from_response(&[0x00, 0xC0, 0x86, 0x23, 0xFF, 0, 0, 0, 0]);
+        assert!(error.is_err());
+    }
+
+    #[test]
+    fn rejects_short_brightness_response() {
+        let error = BrightnessLevel::from_response(&[0x00, 0xC0, 0x86, 0x23]);
+        assert!(error.is_err());
+    }
+
+    #[test]
     fn returns_expected_write_sequences() {
         assert_eq!(BrightnessLevel::High.write_commands(), &SET_BRIGHTNESS_HIGH_COMMANDS);
         assert_eq!(BrightnessLevel::Low.write_commands(), &SET_BRIGHTNESS_LOW_COMMANDS);
@@ -128,5 +140,12 @@ mod tests {
     #[test]
     fn keeps_load_command_stable() {
         assert_eq!(LOAD_BRIGHTNESS_COMMAND, [0x00, 0xC0, 0x02, 0x23, 0xC3]);
+    }
+
+    #[test]
+    fn parses_brightness_from_strings() {
+        assert_eq!("HIGH".parse::<BrightnessLevel>().unwrap(), BrightnessLevel::High);
+        assert_eq!(" low ".parse::<BrightnessLevel>().unwrap(), BrightnessLevel::Low);
+        assert!("medium".parse::<BrightnessLevel>().is_err());
     }
 }
