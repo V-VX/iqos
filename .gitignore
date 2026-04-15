@@ -7,13 +7,14 @@
 
 # Local harness / agent coordination artifacts
 /AGENTS.md
-/.github/
 /docs/plans/
 /rustfmt.toml
 /clippy.toml
+/.github/copilot-instructions.md
 
 # Nested reference repo artifacts that should not leak into the root project
 /iqos_cli/target
 /iqos_cli/.git
 /iqos_cli/.serena
 /iqos_cli/.claude
+/iqos_cli
