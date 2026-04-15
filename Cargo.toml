@@ -1,6 +1,6 @@
 [package]
 name = "iqos"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 authors = ["VVX Club", "VVX Supp"]
 description = "A Rust crate for controlling IQOS devices over BLE and USB"
@@ -8,9 +8,16 @@ license = "GPL-3.0"
 readme = "README.md"
 repository = "https://github.com/V-VX/iqos"
 homepage = "https://github.com/V-VX/iqos"
-keywords = ["iqos", "ble", "bluetooth", "usb", "hardware", "vape", "philipmorris"]
+documentation = "https://docs.rs/iqos"
+keywords = ["iqos", "ble", "usb", "vape", "philipmorris"]
 categories = ["hardware-support", "asynchronous"]
 rust-version = "1.92"
+include = [
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+    "src/**",
+]
 
 [lib]
 name = "iqos"
