@@ -2,7 +2,17 @@ name: CI
 
 on:
   push:
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+      - ".gitignore"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+      - ".gitignore"
+      - "docs/**"
 
 jobs:
   rust:
