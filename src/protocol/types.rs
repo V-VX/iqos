@@ -70,20 +70,22 @@ impl DeviceModel {
 
     /// Return whether this model supports the requested device capability.
     ///
-    /// This matrix is derived from the currently implemented IQOS families in
-    /// `iqos_cli` plus the observed split between one-piece and holder-based
-    /// devices for holder-scoped settings.
+    /// Capability matrix:
+    /// - `Brightness`, `Vibration`, `DeviceLock` — all known models (non-Unknown).
+    /// - `FlexPuff`, `FlexBattery` — ILUMA i and ILUMA i PRIME only.
+    /// - `SmartGesture`, `AutoStart` — ILUMA and ILUMA i (holder form-factor only).
     #[must_use]
     pub const fn supports(self, capability: DeviceCapability) -> bool {
         match capability {
             DeviceCapability::Brightness
-            | DeviceCapability::FlexPuff
-            | DeviceCapability::SmartGesture
-            | DeviceCapability::AutoStart => self.supports_holder_features(),
-            DeviceCapability::Vibration | DeviceCapability::DeviceLock => {
-                !matches!(self, Self::Unknown)
+            | DeviceCapability::Vibration
+            | DeviceCapability::DeviceLock => !matches!(self, Self::Unknown),
+            DeviceCapability::FlexPuff | DeviceCapability::FlexBattery => {
+                matches!(self, Self::IlumaI | Self::IlumaIPrime)
             }
-            DeviceCapability::FlexBattery => matches!(self, Self::IlumaI),
+            DeviceCapability::SmartGesture | DeviceCapability::AutoStart => {
+                self.supports_holder_features()
+            }
         }
     }
 
@@ -148,16 +150,44 @@ mod tests {
 
     #[test]
     fn maps_capabilities_by_model_variation() {
-        assert!(DeviceModel::Iluma.supports(DeviceCapability::Brightness));
-        assert!(DeviceModel::IlumaI.supports(DeviceCapability::FlexPuff));
-        assert!(DeviceModel::IlumaI.supports(DeviceCapability::SmartGesture));
-        assert!(DeviceModel::IlumaI.supports(DeviceCapability::FlexBattery));
-        assert!(!DeviceModel::IlumaOne.supports(DeviceCapability::Brightness));
-        assert!(!DeviceModel::IlumaPrime.supports(DeviceCapability::FlexPuff));
-        assert!(!DeviceModel::IlumaIPrime.supports(DeviceCapability::SmartGesture));
-        assert!(!DeviceModel::IlumaIOne.supports(DeviceCapability::FlexBattery));
-        assert!(!DeviceModel::IlumaPrime.supports(DeviceCapability::FlexBattery));
+        // Brightness — all known models.
+        for model in [
+            DeviceModel::IlumaOne,
+            DeviceModel::Iluma,
+            DeviceModel::IlumaPrime,
+            DeviceModel::IlumaIOne,
+            DeviceModel::IlumaI,
+            DeviceModel::IlumaIPrime,
+        ] {
+            assert!(model.supports(DeviceCapability::Brightness), "{model:?} should support Brightness");
+            assert!(model.supports(DeviceCapability::DeviceLock), "{model:?} should support DeviceLock");
+            assert!(model.supports(DeviceCapability::Vibration), "{model:?} should support Vibration");
+        }
+        assert!(!DeviceModel::Unknown.supports(DeviceCapability::Brightness));
+        assert!(!DeviceModel::Unknown.supports(DeviceCapability::DeviceLock));
         assert!(!DeviceModel::Unknown.supports(DeviceCapability::Vibration));
+
+        // FlexPuff / FlexBattery — IlumaI and IlumaIPrime only.
+        assert!(DeviceModel::IlumaI.supports(DeviceCapability::FlexPuff));
+        assert!(DeviceModel::IlumaIPrime.supports(DeviceCapability::FlexPuff));
+        assert!(DeviceModel::IlumaI.supports(DeviceCapability::FlexBattery));
+        assert!(DeviceModel::IlumaIPrime.supports(DeviceCapability::FlexBattery));
+        for model in [
+            DeviceModel::IlumaOne,
+            DeviceModel::Iluma,
+            DeviceModel::IlumaPrime,
+            DeviceModel::IlumaIOne,
+            DeviceModel::Unknown,
+        ] {
+            assert!(!model.supports(DeviceCapability::FlexPuff), "{model:?} should not support FlexPuff");
+            assert!(!model.supports(DeviceCapability::FlexBattery), "{model:?} should not support FlexBattery");
+        }
+
+        // SmartGesture / AutoStart — Iluma and IlumaI (holder form-factor) only.
+        assert!(DeviceModel::IlumaI.supports(DeviceCapability::SmartGesture));
+        assert!(DeviceModel::Iluma.supports(DeviceCapability::SmartGesture));
+        assert!(!DeviceModel::IlumaIPrime.supports(DeviceCapability::SmartGesture));
+        assert!(!DeviceModel::IlumaIOne.supports(DeviceCapability::SmartGesture));
     }
 
     #[test]
