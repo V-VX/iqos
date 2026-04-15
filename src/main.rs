@@ -206,10 +206,10 @@ async fn select_peripheral(
             continue;
         }
 
-        if let Some(filter) = &normalized_filter {
-            if !name.to_ascii_lowercase().contains(filter) {
-                continue;
-            }
+        if let Some(filter) = &normalized_filter
+            && !name.to_ascii_lowercase().contains(filter)
+        {
+            continue;
         }
 
         candidates.push((name, peripheral));
