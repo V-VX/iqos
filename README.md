@@ -82,6 +82,38 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
+## Local Hardware Tests
+
+The repository includes BLE hardware integration tests under [`tests/hardware_ble.rs`](/Users/vvx/projekt/rs/iqos/tests/hardware_ble.rs). They are ignored by default and intended for local execution only.
+
+These tests are excluded from normal `cargo test` and CI runs. They only exist when you explicitly opt in with `RUSTFLAGS='--cfg iqos_hardware_tests'`.
+
+Set a stable substring of the target device name, then run the ignored test binary with BLE support enabled:
+
+```bash
+export IQOS_TEST_NAME_SUBSTRING="ILUMA"
+RUSTFLAGS="--cfg iqos_hardware_tests" \
+  cargo test --features btleplug-support --test hardware_ble -- --ignored --nocapture
+```
+
+Optional environment variables:
+
+- `IQOS_TEST_SCAN_SECONDS` — override BLE scan duration in seconds (default: `5`)
+- `IQOS_TEST_VIBRATE_MILLIS` — vibration duration for locate-device steps in the full sequence test (default: `750`)
+
+These tests are read-only. They connect to the device, load metadata, and exercise supported read operations such as firmware, vibration, diagnostics, and model-specific settings.
+
+To run the full stateful acceptance sequence that exercises every supported public operation in order, explicitly opt in to writes:
+
+```bash
+export IQOS_TEST_NAME_SUBSTRING="ILUMA"
+export IQOS_TEST_ALLOW_STATEFUL_WRITES=1
+RUSTFLAGS="--cfg iqos_hardware_tests" \
+  cargo test --features btleplug-support --test hardware_ble hardware_exercises_all_supported_functions_in_sequence -- --ignored --nocapture
+```
+
+The full sequence restores settings that have read-back support (`brightness`, `FlexPuff`, `vibration`, `FlexBattery`). Write-only features such as `Smart Gesture` and `Auto Start` are exercised with a `disable -> enable -> disable` cycle, and lock/vibration helpers finish in the unlocked/stopped state.
+
 ---
 
 ## License

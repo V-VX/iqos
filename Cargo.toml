@@ -28,6 +28,9 @@ default = []
 btleplug-support = ["dep:btleplug", "dep:tokio"]
 usb-support = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(iqos_hardware_tests)'] }
+
 [dependencies]
 async-trait = "0.1"
 btleplug = { version = "0.11.8", optional = true }
