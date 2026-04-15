@@ -1,8 +1,5 @@
-//! Protocol-layer types and scaffolding.
-//!
-//! This module will hold extracted command builders, response parsers, protocol
-//! constants, and typed domain models derived from the working `iqos_cli`
-//! implementation.
+//! Protocol-layer command builders, response parsers, typed domain values, and
+//! BLE discovery constants for the IQOS device family.
 
 mod ble;
 mod brightness;
@@ -45,3 +42,4 @@ pub use types::{DeviceCapability, DeviceInfo, DeviceModel};
 pub use vibration::{
     LOAD_VIBRATE_CHARGE_START_COMMAND, LOAD_VIBRATION_SETTINGS_COMMAND, VibrationSettings,
 };
+pub(crate) use vibration::{START_VIBRATE_COMMAND, STOP_VIBRATE_COMMAND};

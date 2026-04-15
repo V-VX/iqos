@@ -1,22 +1,18 @@
 //! # iqos
 //!
-//! Rust library scaffold for controlling IQOS devices.
+//! Rust library for controlling IQOS devices over BLE, exposing diagnostic
+//! telemetry and device controls not available through the official IQOS app.
 //!
-//! This crate is being prepared as the reusable library layer extracted from the
-//! existing `iqos_cli` implementation. The intended architecture keeps protocol
-//! and device logic in the library core, while interactive CLI concerns stay out
-//! of the public API.
+//! ## Layers
 //!
-//! ## Planned layers
-//!
-//! 1. [`protocol`] for command builders, response parsers, and typed domain values
-//! 2. [`transport`] for the transport contract shared by backends
-//! 3. [`transports`] for backend implementations such as BLE and future USB
+//! 1. [`protocol`] — command builders, response parsers, and typed domain values
+//! 2. [`transport`] — transport contract shared by BLE and future USB backends
+//! 3. [`transports`] — backend implementations (BLE via btleplug, USB reserved)
 //!
 //! ## Features
 //!
-//! - `btleplug-support`: enables the BLE transport backend integration scaffold
-//! - `usb-support`: reserved for future USB transport support
+//! - `btleplug-support`: enables the BLE backend via btleplug
+//! - `usb-support`: reserved for future USB transport (not yet implemented)
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -332,6 +328,80 @@ impl<T: Transport> Iqos<T> {
             self.transport.send(&command).await?;
         }
         Ok(())
+    }
+
+    /// Read the current battery voltage via the SCP diagnostic command.
+    ///
+    /// Returns the raw cell voltage in volts (e.g. `4.2`). This uses the
+    /// request/response path and is suitable for on-demand refreshes after the
+    /// BLE session is established.
+    ///
+    /// For the initial connection snapshot (battery percentage via GATT direct
+    /// read), use [`IqosBle::read_battery_level`](crate::ble::IqosBle::read_battery_level).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transport request fails, the response cannot be
+    /// decoded, or the battery voltage field is absent from the frame.
+    pub async fn read_battery_voltage(&self) -> Result<f32> {
+        let response = self.transport.request(&protocol::LOAD_BATTERY_VOLTAGE_COMMAND).await?;
+        protocol::DiagnosticDataBuilder::default()
+            .parse(&response)?
+            .build()
+            .battery_voltage
+            .ok_or_else(|| {
+                Error::ProtocolDecode("battery voltage not present in response".to_string())
+            })
+    }
+
+    /// Trigger an immediate vibration burst on the device.
+    ///
+    /// Used by [`find_my_iqos_start`](Self::find_my_iqos_start). Can also be
+    /// called directly when raw vibration control is needed. Stop the burst
+    /// with [`vibrate_stop`](Self::vibrate_stop).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transport send fails.
+    pub async fn vibrate_start(&self) -> Result<()> {
+        self.transport.send(&protocol::START_VIBRATE_COMMAND).await
+    }
+
+    /// Stop an ongoing vibration burst on the device.
+    ///
+    /// Counterpart to [`vibrate_start`](Self::vibrate_start) and
+    /// [`find_my_iqos_start`](Self::find_my_iqos_start).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transport send fails.
+    pub async fn vibrate_stop(&self) -> Result<()> {
+        self.transport.send(&protocol::STOP_VIBRATE_COMMAND).await
+    }
+
+    /// Start a Find My IQOS session — begin vibrating the device so it can be
+    /// physically located.
+    ///
+    /// The device continues to vibrate until [`find_my_iqos_stop`](Self::find_my_iqos_stop)
+    /// is called. Delegates to [`vibrate_start`](Self::vibrate_start).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transport send fails.
+    pub async fn find_my_iqos_start(&self) -> Result<()> {
+        self.vibrate_start().await
+    }
+
+    /// Stop a Find My IQOS session — halt the vibration burst.
+    ///
+    /// Call after [`find_my_iqos_start`](Self::find_my_iqos_start) once the
+    /// device has been located. Delegates to [`vibrate_stop`](Self::vibrate_stop).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transport send fails.
+    pub async fn find_my_iqos_stop(&self) -> Result<()> {
+        self.vibrate_stop().await
     }
 }
 
@@ -881,5 +951,71 @@ mod tests {
             .expect_err("unsupported model should return error");
 
         assert!(matches!(error, Error::Unsupported(_)));
+    }
+
+    #[test]
+    fn read_battery_voltage_parses_response() {
+        // battery voltage frame: header [0x88, 0x21] at bytes[2..4], raw mV at bytes[5..7]
+        // 0xA8=168, 0x10=16 → LE u16 = 0x10A8 = 4264 → 4.264 V
+        let transport = MockTransport::with_responses([Ok(vec![
+            0x00, 0x08, 0x88, 0x21, 0x00, 0xA8, 0x10, 0x00, 0x00,
+        ])]);
+        let iqos = Iqos::new(transport);
+
+        let voltage = block_on(iqos.read_battery_voltage()).expect("voltage should parse");
+
+        assert!((voltage - 4264_f32 / 1000.0).abs() < f32::EPSILON);
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[protocol::LOAD_BATTERY_VOLTAGE_COMMAND.to_vec()],
+        );
+    }
+
+    #[test]
+    fn vibrate_start_sends_expected_command() {
+        let iqos = Iqos::new(MockTransport::with_responses([]));
+
+        block_on(iqos.vibrate_start()).expect("vibrate start should succeed");
+
+        assert_eq!(
+            iqos.transport().recorded_sends().as_slice(),
+            &[protocol::START_VIBRATE_COMMAND.to_vec()],
+        );
+    }
+
+    #[test]
+    fn vibrate_stop_sends_expected_command() {
+        let iqos = Iqos::new(MockTransport::with_responses([]));
+
+        block_on(iqos.vibrate_stop()).expect("vibrate stop should succeed");
+
+        assert_eq!(
+            iqos.transport().recorded_sends().as_slice(),
+            &[protocol::STOP_VIBRATE_COMMAND.to_vec()],
+        );
+    }
+
+    #[test]
+    fn find_my_iqos_start_delegates_to_vibrate_start() {
+        let iqos = Iqos::new(MockTransport::with_responses([]));
+
+        block_on(iqos.find_my_iqos_start()).expect("find my iqos start should succeed");
+
+        assert_eq!(
+            iqos.transport().recorded_sends().as_slice(),
+            &[protocol::START_VIBRATE_COMMAND.to_vec()],
+        );
+    }
+
+    #[test]
+    fn find_my_iqos_stop_delegates_to_vibrate_stop() {
+        let iqos = Iqos::new(MockTransport::with_responses([]));
+
+        block_on(iqos.find_my_iqos_stop()).expect("find my iqos stop should succeed");
+
+        assert_eq!(
+            iqos.transport().recorded_sends().as_slice(),
+            &[protocol::STOP_VIBRATE_COMMAND.to_vec()],
+        );
     }
 }

@@ -81,16 +81,34 @@ impl IqosBle {
         &self.device_info
     }
 
-    /// Read the raw battery status frame from the device.
+    /// Read the battery level directly from the GATT Battery Service characteristic.
+    ///
+    /// Returns a value in the range 0–100 representing the charge percentage.
+    /// Use this during initial connection setup, alongside serial number and
+    /// firmware version, to obtain a battery snapshot without an SCP round-trip.
+    ///
+    /// For on-demand refreshes after the session is established, use
+    /// [`Iqos::read_battery_voltage`](crate::Iqos::read_battery_voltage) instead,
+    /// which uses the SCP request/response path.
     ///
     /// # Errors
     ///
-    /// Returns an error if the BLE read fails.
-    pub async fn read_battery_frame(&self) -> Result<Vec<u8>> {
-        self.peripheral
+    /// Returns an error if the BLE read fails or the response frame is shorter
+    /// than the three bytes required to extract the level field.
+    pub async fn read_battery_level(&self) -> Result<u8> {
+        let frame = self
+            .peripheral
             .read(&self.battery_characteristic)
             .await
-            .map_err(|error| Error::Transport(error.to_string()))
+            .map_err(|error| Error::Transport(error.to_string()))?;
+
+        if frame.len() < 3 {
+            return Err(Error::ProtocolDecode(
+                "battery characteristic frame too short to extract level".to_string(),
+            ));
+        }
+
+        Ok(frame[2])
     }
 
     /// Send a command over the SCP control characteristic.

@@ -125,9 +125,9 @@ async fn inspect_device(name_filter: Option<&str>) -> Result<(), Box<dyn std::er
     println!("Device information:");
     print_device_info(session.device_info());
 
-    match session.read_battery_frame().await {
-        Ok(frame) => println!("Battery frame: {}", format_bytes(&frame)),
-        Err(error) => println!("Battery frame: read failed ({error})"),
+    match session.read_battery_level().await {
+        Ok(level) => println!("Battery level: {level}%"),
+        Err(error) => println!("Battery level: read failed ({error})"),
     }
 
     Ok(())
@@ -160,8 +160,8 @@ async fn probe_device(
             println!("Holder firmware: {firmware}");
         }
         ProbeCommand::Battery => {
-            let frame = session.read_battery_frame().await?;
-            println!("Battery frame: {}", format_bytes(&frame));
+            let level = session.read_battery_level().await?;
+            println!("Battery level: {level}%");
         }
     }
 
@@ -271,11 +271,6 @@ fn print_device_info(info: &iqos::DeviceInfo) {
     println!("  serial number: {}", info.serial_number.as_deref().unwrap_or("(missing)"));
     println!("  software revision: {}", info.software_revision.as_deref().unwrap_or("(missing)"));
     println!("  manufacturer: {}", info.manufacturer_name.as_deref().unwrap_or("(missing)"));
-}
-
-#[cfg(feature = "btleplug-support")]
-fn format_bytes(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]

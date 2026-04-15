@@ -9,6 +9,19 @@ pub const LOAD_VIBRATION_SETTINGS_COMMAND: [u8; 5] = [0x00, 0xC9, 0x00, 0x23, 0x
 pub const LOAD_VIBRATE_CHARGE_START_COMMAND: [u8; 9] =
     [0x00, 0xC9, 0x07, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08];
 
+/// Command that triggers an immediate vibration burst on the device.
+///
+/// Sent to physically locate the device (Find My IQOS). Stop with
+/// [`STOP_VIBRATE_COMMAND`].
+pub(crate) const START_VIBRATE_COMMAND: [u8; 9] =
+    [0x00, 0xC0, 0x45, 0x22, 0x01, 0x1E, 0x00, 0x00, 0xC3];
+
+/// Command that stops an ongoing vibration burst on the device.
+///
+/// Counterpart to [`START_VIBRATE_COMMAND`].
+pub(crate) const STOP_VIBRATE_COMMAND: [u8; 9] =
+    [0x00, 0xC0, 0x45, 0x22, 0x00, 0x1E, 0x00, 0x00, 0xD5];
+
 const WHEN_HEATING_START_FLAG: u16 = 0x0100;
 const WHEN_STARTING_TO_USE_FLAG: u16 = 0x1000;
 const WHEN_MANUALLY_TERMINATED_FLAG: u16 = 0x0010;
@@ -372,6 +385,13 @@ mod tests {
             LOAD_VIBRATE_CHARGE_START_COMMAND,
             [0x00, 0xC9, 0x07, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08]
         );
+    }
+
+    #[test]
+    fn keeps_vibrate_trigger_commands_stable() {
+        use super::{START_VIBRATE_COMMAND, STOP_VIBRATE_COMMAND};
+        assert_eq!(START_VIBRATE_COMMAND, [0x00, 0xC0, 0x45, 0x22, 0x01, 0x1E, 0x00, 0x00, 0xC3]);
+        assert_eq!(STOP_VIBRATE_COMMAND, [0x00, 0xC0, 0x45, 0x22, 0x00, 0x1E, 0x00, 0x00, 0xD5]);
     }
 
     #[test]
