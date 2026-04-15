@@ -1,28 +1,46 @@
 # IQOS
 
+[![CI](https://github.com/vvx/iqos/actions/workflows/ci.yml/badge.svg)](https://github.com/vvx/iqos/actions/workflows/ci.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+
 Rust library for controlling IQOS devices over BLE, exposing device internals not accessible through the official IQOS app.
+
+> **Early development.** The public API is still taking shape and should be considered unstable.
+
+---
 
 ## What This Exposes
 
-The official IQOS app provides basic status and settings. This library goes further by surfacing **diagnostic telemetry that the app does not expose**:
+The official IQOS app surfaces only basic status and settings. This library goes further.
 
-- Total puff (smoking) count — lifetime usage counter
-- Days used — how long the device has been in service
-- Battery voltage — raw cell voltage, not just a percentage
+### Diagnostic telemetry — not available in the official app
 
-Beyond telemetry, the library also provides programmatic control over settings the app either hides or makes cumbersome:
+| Field | Description |
+|---|---|
+| Total puff count | Lifetime usage counter |
+| Days used | How long the device has been in service |
+| Battery voltage | Raw cell voltage, not just a percentage |
 
-- Brightness, vibration, FlexPuff, FlexBattery, Pause Mode
+### Programmatic device control
+
+- Brightness, vibration, FlexPuff
+- FlexBattery mode and Pause Mode _(ILUMA i)_
 - Smart Gesture and Auto Start
 - Device lock / unlock
+- Firmware version (stick and holder)
 
-## Status
+---
 
-Early development. The public API is still taking shape and should be considered unstable.
+## Transport Support
 
-**Transport support:**
-- BLE (Bluetooth Low Energy) — implemented, enabled via the `btleplug-support` feature
-- USB — not yet implemented; the architecture is designed to support it, but no USB backend exists yet
+| Transport | Status | Feature flag |
+|---|---|---|
+| BLE (Bluetooth Low Energy) | ✅ Implemented | `btleplug-support` |
+| USB | ⚠️ Not yet implemented | `usb-support` _(reserved)_ |
+
+> ⚠️ **USB is not implemented.** The architecture is designed to support it — the `Transport` trait is transport-agnostic — but no USB backend exists yet.
+
+---
 
 ## Architecture
 
@@ -47,17 +65,14 @@ src/
     └── usb.rs          # USB stub (usb-support feature, not yet implemented)
 ```
 
-## Features
+### Design principles
 
-- `btleplug-support` — enables BLE backend via [`btleplug`](https://github.com/deviceplug/btleplug)
-- `usb-support` — reserved for future USB transport (not yet implemented)
+- **Library-first** — no stdout/stderr output, no `unwrap()`/`panic!()` in library code
+- **Typed protocol models** — all device state is represented as typed Rust values, not raw bytes
+- **Transport-agnostic** — BLE and USB share the same `Transport` trait
+- **Testable without hardware** — full coverage via `MockTransport`
 
-## Design Principles
-
-- Library-first: no stdout/stderr output, no `unwrap()`/`panic!()` in library code
-- Typed protocol models: all device state is represented as typed Rust values, not raw bytes
-- Transport-agnostic: BLE and USB are interchangeable backends behind the `Transport` trait
-- Testable without hardware: full test coverage via `MockTransport`
+---
 
 ## Development
 
@@ -66,6 +81,8 @@ cargo fmt --all --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
+
+---
 
 ## License
 
