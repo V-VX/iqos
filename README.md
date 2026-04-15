@@ -1,6 +1,6 @@
 # IQOS
 
-[![CI](https://github.com/vvx/iqos/actions/workflows/ci.yml/badge.svg)](https://github.com/vvx/iqos/actions/workflows/ci.yml)
+[![CI](https://github.com/V-VX/iqos/actions/workflows/ci.yml/badge.svg)](https://github.com/V-VX/iqos/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 Rust library for controlling IQOS devices over BLE, exposing device internals not accessible through the official IQOS app.
