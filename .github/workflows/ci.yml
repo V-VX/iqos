@@ -18,8 +18,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install stable Rust
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92"
+          components: rustfmt, clippy
 
       - name: Restore cargo cache
         uses: Swatinem/rust-cache@v2
