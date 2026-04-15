@@ -18,3 +18,6 @@
 /iqos_cli/.serena
 /iqos_cli/.claude
 /iqos_cli
+.serena
+.claude
+.agents
