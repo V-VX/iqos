@@ -16,7 +16,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-btleplug-support = ["dep:btleplug"]
+btleplug-support = ["dep:btleplug", "dep:tokio"]
 usb-support = []
 
 [dependencies]
@@ -24,7 +24,5 @@ async-trait = "0.1"
 btleplug = { version = "0.11.8", optional = true }
 futures = "0.3"
 thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"], optional = true }
 uuid = { version = "1", features = ["macro-diagnostics"] }
-
-[dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
