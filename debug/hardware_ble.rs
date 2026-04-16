@@ -1,6 +1,4 @@
-#![cfg(all(feature = "btleplug-support", iqos_hardware_tests))]
-
-use std::{env, io, sync::OnceLock};
+use std::{env, io};
 
 use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::{Manager, Peripheral};
@@ -8,14 +6,9 @@ use iqos::{
     BrightnessLevel, DeviceCapability, DeviceInfo, DeviceModel, FirmwareKind, FlexBatteryMode,
     FlexBatterySettings, FlexPuffSetting, Iqos, IqosBle, VibrationSettings,
 };
-use tokio::{
-    sync::Mutex,
-    time::{Duration, sleep},
-};
+use tokio::time::{Duration, sleep};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
-
-static HARDWARE_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 /// Evaluate `$result`; on error print `[❌] $label: <error>` and return early.
 macro_rules! run {
@@ -30,9 +23,12 @@ macro_rules! run {
     };
 }
 
+// ── config ────────────────────────────────────────────────────────────────────
+
 #[derive(Debug)]
 struct HardwareConfig {
-    name_filter: String,
+    /// Optional substring to filter BLE device names.  `None` = first IQOS device found.
+    name_filter: Option<String>,
     scan_seconds: u64,
     vibrate_millis: u64,
     allow_stateful_writes: bool,
@@ -40,28 +36,23 @@ struct HardwareConfig {
 
 impl HardwareConfig {
     fn from_env() -> TestResult<Self> {
-        let name_filter = env::var("IQOS_TEST_NAME_SUBSTRING").map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "set IQOS_TEST_NAME_SUBSTRING to a stable part of the BLE device name before running hardware tests",
-            )
-        })?;
+        let name_filter = match env::var("IQOS_TEST_NAME_SUBSTRING") {
+            Ok(value) if !value.trim().is_empty() => Some(value),
+            _ => None,
+        };
 
         let scan_seconds = match env::var("IQOS_TEST_SCAN_SECONDS") {
-            Ok(value) => value.parse::<u64>().map_err(|error| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("invalid IQOS_TEST_SCAN_SECONDS value: {error}"),
-                )
+            Ok(value) => value.parse::<u64>().map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidInput, format!("IQOS_TEST_SCAN_SECONDS: {e}"))
             })?,
             Err(_) => 5,
         };
 
         let vibrate_millis = match env::var("IQOS_TEST_VIBRATE_MILLIS") {
-            Ok(value) => value.parse::<u64>().map_err(|error| {
+            Ok(value) => value.parse::<u64>().map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("invalid IQOS_TEST_VIBRATE_MILLIS value: {error}"),
+                    format!("IQOS_TEST_VIBRATE_MILLIS: {e}"),
                 )
             })?,
             Err(_) => 750,
@@ -71,29 +62,65 @@ impl HardwareConfig {
 
         Ok(Self { name_filter, scan_seconds, vibrate_millis, allow_stateful_writes })
     }
+}
 
-    fn require_stateful_writes(&self) -> TestResult {
-        if self.allow_stateful_writes {
-            return Ok(());
+// ── entry point ───────────────────────────────────────────────────────────────
+
+#[tokio::main]
+async fn main() {
+    let config = match HardwareConfig::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("[❌] {e}");
+            std::process::exit(1);
         }
+    };
 
-        Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "set IQOS_TEST_ALLOW_STATEFUL_WRITES=1 before running the full hardware sequence",
-        )
-        .into())
+    println!("=== IQOS Hardware Debug ===");
+    match &config.name_filter {
+        Some(f) => println!("filter:  {f:?}"),
+        None => println!("filter:  (any IQOS device)"),
+    }
+    println!("stateful: {}", if config.allow_stateful_writes { "enabled" } else { "disabled" });
+
+    let mut passed = 0usize;
+    let mut failed = 0usize;
+
+    run_suite("snapshot", suite_snapshot(&config), &mut passed, &mut failed).await;
+    run_suite("read features", suite_read_features(&config), &mut passed, &mut failed).await;
+
+    if config.allow_stateful_writes {
+        run_suite("exercise all", suite_exercise_all(&config), &mut passed, &mut failed).await;
+    } else {
+        println!("\n[⏭]  exercise all — set IQOS_TEST_ALLOW_STATEFUL_WRITES=1 to enable");
+    }
+
+    println!("\n=== {passed} passed, {failed} failed ===");
+    if failed > 0 {
+        std::process::exit(1);
     }
 }
 
-// ── tests ────────────────────────────────────────────────────────────────────
+async fn run_suite(
+    name: &str,
+    fut: impl std::future::Future<Output = TestResult>,
+    passed: &mut usize,
+    failed: &mut usize,
+) {
+    match fut.await {
+        Ok(()) => *passed += 1,
+        Err(e) => {
+            println!("[❌] suite '{name}': {e}");
+            *failed += 1;
+        }
+    }
+}
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires local IQOS BLE hardware and IQOS_TEST_NAME_SUBSTRING"]
-async fn hardware_reads_basic_snapshot() -> TestResult {
-    println!("\n=== hardware_reads_basic_snapshot ===");
-    let _guard = hardware_test_lock().lock().await;
-    let config = run!("load config", HardwareConfig::from_env());
-    let session = run!("connect", connect_session(&config).await);
+// ── suites ────────────────────────────────────────────────────────────────────
+
+async fn suite_snapshot(config: &HardwareConfig) -> TestResult {
+    println!("\n=== snapshot ===");
+    let session = run!("connect", connect_session(config).await);
 
     let model = session.model();
     let info = session.device_info();
@@ -122,13 +149,9 @@ async fn hardware_reads_basic_snapshot() -> TestResult {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires local IQOS BLE hardware and IQOS_TEST_NAME_SUBSTRING"]
-async fn hardware_reads_supported_features() -> TestResult {
-    println!("\n=== hardware_reads_supported_features ===");
-    let _guard = hardware_test_lock().lock().await;
-    let config = run!("load config", HardwareConfig::from_env());
-    let session = run!("connect", connect_session(&config).await);
+async fn suite_read_features(config: &HardwareConfig) -> TestResult {
+    println!("\n=== read features ===");
+    let session = run!("connect", connect_session(config).await);
     let model = session.model();
     let iqos = Iqos::new(session);
 
@@ -171,15 +194,9 @@ async fn hardware_reads_supported_features() -> TestResult {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires local IQOS BLE hardware, IQOS_TEST_NAME_SUBSTRING, and IQOS_TEST_ALLOW_STATEFUL_WRITES=1"]
-async fn hardware_exercises_all_supported_functions_in_sequence() -> TestResult {
-    println!("\n=== hardware_exercises_all_supported_functions_in_sequence ===");
-    let _guard = hardware_test_lock().lock().await;
-    let config = run!("load config", HardwareConfig::from_env());
-    run!("require stateful writes", config.require_stateful_writes());
-
-    let session = run!("connect", connect_session(&config).await);
+async fn suite_exercise_all(config: &HardwareConfig) -> TestResult {
+    println!("\n=== exercise all ===");
+    let session = run!("connect", connect_session(config).await);
     let model = session.model();
     let iqos = Iqos::new(session);
 
@@ -269,7 +286,7 @@ async fn hardware_exercises_all_supported_functions_in_sequence() -> TestResult 
     Ok(())
 }
 
-// ── helpers: connection ───────────────────────────────────────────────────────
+// ── connection ────────────────────────────────────────────────────────────────
 
 async fn connect_session(config: &HardwareConfig) -> TestResult<IqosBle> {
     let (peripheral, selected_name) = run!("scan for device", select_peripheral(config).await);
@@ -278,7 +295,7 @@ async fn connect_session(config: &HardwareConfig) -> TestResult<IqosBle> {
     Ok(session)
 }
 
-// ── helpers: exercise functions ───────────────────────────────────────────────
+// ── exercise functions ────────────────────────────────────────────────────────
 
 async fn exercise_brightness(iqos: &Iqos<IqosBle>) -> TestResult {
     let original = run!("brightness: read initial", iqos.read_brightness().await);
@@ -442,7 +459,7 @@ async fn exercise_lock_unlock(iqos: &Iqos<IqosBle>, model: DeviceModel) -> TestR
     Ok(())
 }
 
-// ── helpers: display ──────────────────────────────────────────────────────────
+// ── display helpers ───────────────────────────────────────────────────────────
 
 fn strip_nul(s: &str) -> &str {
     s.trim_end_matches('\0')
@@ -464,7 +481,7 @@ fn check_voltage(voltage: f32) -> TestResult {
     Ok(())
 }
 
-// ── helpers: misc ─────────────────────────────────────────────────────────────
+// ── misc helpers ──────────────────────────────────────────────────────────────
 
 fn env_flag(name: &str) -> TestResult<bool> {
     match env::var(name) {
@@ -493,8 +510,7 @@ fn toggle_flexbattery(settings: FlexBatterySettings) -> FlexBatterySettings {
         FlexBatteryMode::Performance => FlexBatteryMode::Eco,
         FlexBatteryMode::Eco => FlexBatteryMode::Performance,
     };
-
-    FlexBatterySettings::new(alternate_mode, settings.pause_mode().map(|value| !value))
+    FlexBatterySettings::new(alternate_mode, settings.pause_mode().map(|v| !v))
 }
 
 fn toggle_vibration_settings(model: DeviceModel, settings: VibrationSettings) -> VibrationSettings {
@@ -525,15 +541,18 @@ async fn select_peripheral(config: &HardwareConfig) -> TestResult<(Peripheral, S
         .next()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no Bluetooth adapter found"))?;
 
-    println!(
-        "Scanning for IQOS devices matching {:?} for {} seconds...",
-        config.name_filter, config.scan_seconds
-    );
+    match &config.name_filter {
+        Some(filter) => println!(
+            "Scanning for IQOS devices matching {:?} for {} seconds...",
+            filter, config.scan_seconds
+        ),
+        None => println!("Scanning for any IQOS device for {} seconds...", config.scan_seconds),
+    }
     adapter.start_scan(ScanFilter::default()).await?;
     sleep(Duration::from_secs(config.scan_seconds)).await;
     adapter.stop_scan().await?;
 
-    let normalized_filter = config.name_filter.to_ascii_lowercase();
+    let normalized_filter = config.name_filter.as_deref().map(str::to_ascii_lowercase);
     let mut candidates = Vec::new();
 
     for peripheral in adapter.peripherals().await? {
@@ -543,27 +562,23 @@ async fn select_peripheral(config: &HardwareConfig) -> TestResult<(Peripheral, S
         let Some(name) = properties.local_name else {
             continue;
         };
-
         if !name.to_ascii_uppercase().contains("IQOS") {
             continue;
         }
-        if !name.to_ascii_lowercase().contains(&normalized_filter) {
+        if let Some(filter) = &normalized_filter
+            && !name.to_ascii_lowercase().contains(filter.as_str())
+        {
             continue;
         }
-
         candidates.push((name, peripheral));
     }
 
-    candidates.sort_by(|left, right| left.0.cmp(&right.0));
+    candidates.sort_by(|l, r| l.0.cmp(&r.0));
     candidates.into_iter().next().map(|(name, peripheral)| (peripheral, name)).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("no IQOS peripheral matched IQOS_TEST_NAME_SUBSTRING={:?}", config.name_filter),
-        )
-        .into()
+        let detail = match &config.name_filter {
+            Some(f) => format!("no IQOS peripheral matched IQOS_TEST_NAME_SUBSTRING={f:?}"),
+            None => "no IQOS peripheral found nearby".to_string(),
+        };
+        io::Error::new(io::ErrorKind::NotFound, detail).into()
     })
-}
-
-fn hardware_test_lock() -> &'static Mutex<()> {
-    HARDWARE_TEST_LOCK.get_or_init(|| Mutex::new(()))
 }

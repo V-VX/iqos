@@ -159,9 +159,18 @@ mod tests {
             DeviceModel::IlumaI,
             DeviceModel::IlumaIPrime,
         ] {
-            assert!(model.supports(DeviceCapability::Brightness), "{model:?} should support Brightness");
-            assert!(model.supports(DeviceCapability::DeviceLock), "{model:?} should support DeviceLock");
-            assert!(model.supports(DeviceCapability::Vibration), "{model:?} should support Vibration");
+            assert!(
+                model.supports(DeviceCapability::Brightness),
+                "{model:?} should support Brightness"
+            );
+            assert!(
+                model.supports(DeviceCapability::DeviceLock),
+                "{model:?} should support DeviceLock"
+            );
+            assert!(
+                model.supports(DeviceCapability::Vibration),
+                "{model:?} should support Vibration"
+            );
         }
         assert!(!DeviceModel::Unknown.supports(DeviceCapability::Brightness));
         assert!(!DeviceModel::Unknown.supports(DeviceCapability::DeviceLock));
@@ -179,8 +188,14 @@ mod tests {
             DeviceModel::IlumaIOne,
             DeviceModel::Unknown,
         ] {
-            assert!(!model.supports(DeviceCapability::FlexPuff), "{model:?} should not support FlexPuff");
-            assert!(!model.supports(DeviceCapability::FlexBattery), "{model:?} should not support FlexBattery");
+            assert!(
+                !model.supports(DeviceCapability::FlexPuff),
+                "{model:?} should not support FlexPuff"
+            );
+            assert!(
+                !model.supports(DeviceCapability::FlexBattery),
+                "{model:?} should not support FlexBattery"
+            );
         }
 
         // SmartGesture / AutoStart — Iluma and IlumaI (holder form-factor) only.
