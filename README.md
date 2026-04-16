@@ -82,41 +82,41 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
-## Local Hardware Debug Harness
+## Local Hardware Debug
 
-The repository includes a local BLE debug harness at [`debug/hardware_ble.rs`](/Users/vvx/projekt/rs/iqos/debug/hardware_ble.rs). It is a developer-only binary and is not used by CI.
+The repository includes a local BLE debug binary at [`debug/hardware_ble.rs`](/Users/vvx/projekt/rs/iqos/debug/hardware_ble.rs).
 
-Set a stable substring of the target device name, then run the harness with BLE support enabled:
+Basic run:
 
 ```bash
-export IQOS_TEST_NAME_SUBSTRING="ILUMA"
 cargo run --features btleplug-support --bin hardware_ble
 ```
 
-Optional environment variables:
+Run against a specific device name:
 
-- `IQOS_TEST_ALLOW_STATEFUL_WRITES` — enable stateful write exercises (`1` or `true`)
+```bash
+IQOS_TEST_NAME_SUBSTRING="ILUMA" \
+  cargo run --features btleplug-support --bin hardware_ble
+```
+
+Enable setting changes and verification:
+
+```bash
+IQOS_TEST_ALLOW_STATEFUL_WRITES=1 \
+  cargo run --features btleplug-support --bin hardware_ble
+```
+
+Useful environment variables:
+
+- `IQOS_TEST_NAME_SUBSTRING` — optional device-name filter
+- `IQOS_TEST_ALLOW_STATEFUL_WRITES` — enable write operations and verification loops (`1` or `true`)
 - `IQOS_TEST_VIBRATE_MILLIS` — vibration duration for locate-device steps (default: `500`)
 
-With `IQOS_TEST_ALLOW_STATEFUL_WRITES=1`, the harness runs command-by-command verification loops for the settings that have stable read-back support in the library (`brightness`, `FlexPuff`, `vibration`, `FlexBattery`):
+When `IQOS_TEST_ALLOW_STATEFUL_WRITES=1` is set, the binary reads the current setting, writes the opposite value, reads again to verify the change, restores the original value, and reads again to verify restoration for settings that support read-back (`brightness`, `FlexPuff`, `vibration`, `FlexBattery`).
 
-- read current status
-- send the opposite setting
-- read status again and verify the change
-- send the original setting
-- read status again and verify restoration
+`autostart` and `smartgesture` are also checked, but their status read is still experimental and based on a reverse-engineered probe in the debug binary rather than a stable library API.
 
-Example:
-
-```bash
-export IQOS_TEST_NAME_SUBSTRING="ILUMA"
-export IQOS_TEST_ALLOW_STATEFUL_WRITES=1
-cargo run --features btleplug-support --bin hardware_ble
-```
-
-For `autostart` and `smartgesture`, the harness currently uses an experimental reverse-engineered status-probe path in the debug binary to discover a matching `0x00 C9 07 24 <subtype> 00 00 00 XX` read command before it performs the same verification loop. This is intentionally kept out of the library API until the protocol is confirmed more rigorously.
-
-For direct commands such as vibration bursts and lock/unlock, the harness records the requests but cannot perform a true state read-back because the protocol does not currently expose a matching status read through the library. The harness always finishes those write-only steps in a known end state: vibration is stopped, and the device is left unlocked.
+Direct commands such as vibration bursts and lock/unlock do not currently have a matching read-back status in the library. Those steps are still executed, and the binary finishes them in a known end state: vibration stopped and device unlocked.
 
 ---
 
