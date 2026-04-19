@@ -28,6 +28,11 @@ name = "hardware_ble"
 path = "debug/hardware_ble.rs"
 required-features = ["btleplug-support"]
 
+[[bin]]
+name = "autostart"
+path = "debug/autostart.rs"
+required-features = ["btleplug-support"]
+
 [features]
 default = []
 btleplug-support = ["dep:btleplug", "dep:tokio"]

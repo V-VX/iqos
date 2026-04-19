@@ -1,3 +1,5 @@
+use crate::{Error, Result};
+
 /// Command used to enable Smart Gesture.
 ///
 /// Smart Gesture is supported on IQOS ILUMA and ILUMA i holder-based models.
@@ -30,11 +32,45 @@ pub const fn autostart_command(enabled: bool) -> &'static [u8] {
     if enabled { &AUTOSTART_ENABLE_COMMAND } else { &AUTOSTART_DISABLE_COMMAND }
 }
 
+/// Command used to request the current Auto Start setting.
+///
+/// Experimental: derived from packet capture, not verified on hardware.
+pub const LOAD_AUTOSTART_COMMAND: [u8; 9] = [0x00, 0xC9, 0x07, 0x24, 0x01, 0x00, 0x00, 0x00, 0x22];
+
+/// Parse Auto Start state from a protocol response frame.
+///
+/// # Errors
+///
+/// Returns an error if the frame is too short, the header bytes do not match
+/// the observed Auto Start response format, or the flag byte is unknown.
+pub fn autostart_from_response(bytes: &[u8]) -> Result<bool> {
+    if bytes.len() < 9 {
+        return Err(Error::ProtocolDecode(
+            "invalid Auto Start response: frame too short".to_string(),
+        ));
+    }
+
+    if bytes[0] != 0x00 || bytes[1] != 0x08 || bytes[2] != 0x87 || bytes[3] != 0x24 {
+        return Err(Error::ProtocolDecode(
+            "invalid Auto Start response: header mismatch".to_string(),
+        ));
+    }
+
+    match bytes[5] {
+        0x00 => Ok(false),
+        0x01 => Ok(true),
+        _ => {
+            Err(Error::ProtocolDecode("invalid Auto Start response: unknown flag byte".to_string()))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AUTOSTART_DISABLE_COMMAND, AUTOSTART_ENABLE_COMMAND, SMARTGESTURE_DISABLE_COMMAND,
-        SMARTGESTURE_ENABLE_COMMAND, autostart_command, smartgesture_command,
+        AUTOSTART_DISABLE_COMMAND, AUTOSTART_ENABLE_COMMAND, LOAD_AUTOSTART_COMMAND,
+        SMARTGESTURE_DISABLE_COMMAND, SMARTGESTURE_ENABLE_COMMAND, autostart_command,
+        autostart_from_response, smartgesture_command,
     };
 
     #[test]
@@ -70,6 +106,46 @@ mod tests {
         assert_eq!(
             AUTOSTART_DISABLE_COMMAND,
             [0x00, 0xC9, 0x47, 0x24, 0x01, 0x00, 0x00, 0x00, 0x54]
+        );
+    }
+
+    #[test]
+    fn keeps_load_autostart_command_stable() {
+        assert_eq!(LOAD_AUTOSTART_COMMAND, [0x00, 0xC9, 0x07, 0x24, 0x01, 0x00, 0x00, 0x00, 0x22]);
+    }
+
+    #[test]
+    fn parses_autostart_enabled_response() {
+        let enabled =
+            autostart_from_response(&[0x00, 0x08, 0x87, 0x24, 0x01, 0x01, 0x00, 0x00, 0xA5]);
+        assert!(enabled.unwrap());
+    }
+
+    #[test]
+    fn parses_autostart_disabled_response() {
+        let disabled =
+            autostart_from_response(&[0x00, 0x08, 0x87, 0x24, 0x01, 0x00, 0x00, 0x00, 0x00]);
+        assert!(!disabled.unwrap());
+    }
+
+    #[test]
+    fn rejects_short_autostart_response() {
+        assert!(autostart_from_response(&[0x00, 0x08, 0x87]).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_autostart_header() {
+        assert!(
+            autostart_from_response(&[0x00, 0x00, 0x87, 0x24, 0x01, 0x01, 0x00, 0x00, 0xA5])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_autostart_flag() {
+        assert!(
+            autostart_from_response(&[0x00, 0x08, 0x87, 0x24, 0x01, 0xFF, 0x00, 0x00, 0xA5])
+                .is_err()
         );
     }
 }
