@@ -36,7 +36,9 @@ pub use flexbattery::{
     FlexBatteryMode, FlexBatterySettings, LOAD_FLEXBATTERY_COMMAND, LOAD_PAUSEMODE_COMMAND,
 };
 pub use flexpuff::{FlexPuffSetting, LOAD_FLEXPUFF_COMMAND};
-pub use gesture::{autostart_command, smartgesture_command};
+pub use gesture::{
+    LOAD_AUTOSTART_COMMAND, autostart_command, autostart_from_response, smartgesture_command,
+};
 pub use lock::{lock_commands, unlock_commands};
 pub use types::{DeviceCapability, DeviceInfo, DeviceModel};
 pub use vibration::{

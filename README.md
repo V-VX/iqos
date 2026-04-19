@@ -118,6 +118,28 @@ When `IQOS_TEST_ALLOW_STATEFUL_WRITES=1` is set, the binary reads the current se
 
 Direct commands such as vibration bursts and lock/unlock do not currently have a matching read-back status in the library. Those steps are still executed, and the binary finishes them in a known end state: vibration stopped and device unlocked.
 
+### Focused Feature Debug Binaries
+
+Implementation-local real-device probes should live in a single file directly under `debug/`, not
+inside the integrated `hardware_ble` harness. Register each file as its own binary target in
+`Cargo.toml`.
+
+Example:
+
+```toml
+[[bin]]
+name = "autostart"
+path = "debug/autostart.rs"
+required-features = ["btleplug-support"]
+```
+
+Then run only that focused probe:
+
+```bash
+IQOS_TEST_ALLOW_STATEFUL_WRITES=1 \
+  cargo run --features btleplug-support --bin autostart
+```
+
 ---
 
 ## License
