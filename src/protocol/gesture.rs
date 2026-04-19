@@ -56,6 +56,12 @@ pub fn autostart_from_response(bytes: &[u8]) -> Result<bool> {
         ));
     }
 
+    if bytes[4] != 0x01 {
+        return Err(Error::ProtocolDecode(
+            "invalid Auto Start response: setting ID mismatch".to_string(),
+        ));
+    }
+
     match bytes[5] {
         0x00 => Ok(false),
         0x01 => Ok(true),
@@ -137,6 +143,14 @@ mod tests {
     fn rejects_invalid_autostart_header() {
         assert!(
             autostart_from_response(&[0x00, 0x00, 0x87, 0x24, 0x01, 0x01, 0x00, 0x00, 0xA5])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_mismatched_autostart_setting_id() {
+        assert!(
+            autostart_from_response(&[0x00, 0x08, 0x87, 0x24, 0x02, 0x01, 0x00, 0x00, 0xA5])
                 .is_err()
         );
     }

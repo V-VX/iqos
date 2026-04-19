@@ -128,8 +128,8 @@ Example:
 
 ```toml
 [[bin]]
-name = "autostart_read"
-path = "debug/autostart_read.rs"
+name = "autostart"
+path = "debug/autostart.rs"
 required-features = ["btleplug-support"]
 ```
 
@@ -137,7 +137,7 @@ Then run only that focused probe:
 
 ```bash
 IQOS_TEST_ALLOW_STATEFUL_WRITES=1 \
-  cargo run --features btleplug-support --bin autostart_read
+  cargo run --features btleplug-support --bin autostart
 ```
 
 ---
