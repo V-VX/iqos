@@ -277,7 +277,7 @@ fn print_device_status(status: &iqos::DeviceStatus) {
     println!("Stick firmware: {}", status.stick_firmware);
     match &status.holder_firmware {
         Some(fw) => println!("Holder firmware: {fw}"),
-        None => println!("Holder firmware: n/a (one-piece model)"),
+        None => println!("Holder firmware: n/a (no holder support)"),
     }
     match status.battery_voltage {
         Some(v) => println!("Battery voltage: {v:.3} V"),

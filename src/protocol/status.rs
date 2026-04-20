@@ -2,9 +2,10 @@ use crate::protocol::FirmwareVersion;
 
 /// Aggregated firmware and battery snapshot for a connected IQOS device.
 ///
-/// For folder-type models (`Iluma`, `IlumaI`) both `stick_firmware` and
-/// `holder_firmware` are populated. For one-piece models `holder_firmware`
-/// is `None`. `battery_voltage` is `None` when the diagnostic read fails.
+/// For holder models (`Iluma`, `IlumaPrime`, `IlumaI`, `IlumaIPrime`) both
+/// `stick_firmware` and `holder_firmware` are populated. For one-piece models
+/// `holder_firmware` is `None`. `battery_voltage` is `None` when the
+/// diagnostic read fails.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceStatus {
     /// Firmware version reported by the stick (or the device itself on one-piece models).

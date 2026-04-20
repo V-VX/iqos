@@ -373,7 +373,7 @@ impl<T: Transport> Iqos<T> {
             })
     }
 
-    /// Read a device status snapshot: stick firmware, holder firmware (folder-type only),
+    /// Read a device status snapshot: stick firmware, holder firmware (holder models only),
     /// and battery voltage.
     ///
     /// Firmware reads are fatal — they propagate errors. Battery voltage uses `.ok()` so a
@@ -1146,6 +1146,32 @@ mod tests {
             Some(FirmwareVersion { major: 1, minor: 2, patch: 3, year: 25 }),
         );
         assert!(status.battery_voltage.is_some());
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[
+                protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::LOAD_HOLDER_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::LOAD_BATTERY_VOLTAGE_COMMAND.to_vec(),
+            ],
+        );
+    }
+
+    #[test]
+    fn read_device_status_for_prime_folder_model_sends_holder_firmware_command() {
+        let transport = MockTransport::with_responses([
+            Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Ok(vec![0x00, 0x08, 0x88, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x19]),
+            Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8, 0x10, 0x00, 0x00]),
+        ]);
+        let iqos = Iqos::new(transport);
+
+        let status = block_on(iqos.read_device_status(DeviceModel::IlumaPrime))
+            .expect("prime folder status should succeed");
+
+        assert_eq!(
+            status.holder_firmware,
+            Some(FirmwareVersion { major: 1, minor: 2, patch: 3, year: 25 }),
+        );
         assert_eq!(
             iqos.transport().recorded_requests().as_slice(),
             &[
