@@ -376,8 +376,8 @@ impl<T: Transport> Iqos<T> {
     /// Read a device status snapshot: stick firmware, holder firmware (holder models only),
     /// and battery voltage.
     ///
-    /// Firmware reads are fatal — they propagate errors. Battery voltage uses `.ok()` so a
-    /// failed diagnostic read yields `None` rather than aborting the whole status read.
+    /// Firmware reads are fatal — they propagate errors. Battery voltage transport failures
+    /// yield `None`; protocol decode errors still propagate.
     ///
     /// # Errors
     ///
@@ -389,7 +389,11 @@ impl<T: Transport> Iqos<T> {
         } else {
             None
         };
-        let battery_voltage = self.read_battery_voltage().await.ok();
+        let battery_voltage = match self.read_battery_voltage().await {
+            Ok(voltage) => Some(voltage),
+            Err(Error::Transport(_)) => None,
+            Err(error) => return Err(error),
+        };
         Ok(DeviceStatus { stick_firmware, holder_firmware, battery_voltage })
     }
 
@@ -1195,6 +1199,41 @@ mod tests {
             .expect("battery failure should not abort status read");
 
         assert!(status.battery_voltage.is_none());
+    }
+
+    #[test]
+    fn read_device_status_propagates_holder_firmware_error() {
+        let transport = MockTransport::with_responses([
+            Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Err(Error::Transport("holder read failed".to_string())),
+        ]);
+        let iqos = Iqos::new(transport);
+
+        let error = block_on(iqos.read_device_status(DeviceModel::Iluma))
+            .expect_err("holder firmware error should surface");
+
+        assert!(matches!(error, Error::Transport(message) if message == "holder read failed"));
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[
+                protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::LOAD_HOLDER_FIRMWARE_VERSION_COMMAND.to_vec(),
+            ],
+        );
+    }
+
+    #[test]
+    fn read_device_status_propagates_battery_decode_errors() {
+        let transport = MockTransport::with_responses([
+            Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8]),
+        ]);
+        let iqos = Iqos::new(transport);
+
+        let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
+            .expect_err("battery decode error should surface");
+
+        assert!(matches!(error, Error::ProtocolDecode(_)));
     }
 
     #[test]
