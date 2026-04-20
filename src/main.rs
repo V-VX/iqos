@@ -112,7 +112,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "btleplug-support")]
 async fn inspect_device(name_filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    use iqos::IqosBle;
+    use iqos::{Iqos, IqosBle};
 
     let (peripheral, selected_name) = select_peripheral(name_filter).await?;
     println!("Selected device: {selected_name}");
@@ -121,13 +121,20 @@ async fn inspect_device(name_filter: Option<&str>) -> Result<(), Box<dyn std::er
     print_service_summary(&peripheral);
 
     let session = IqosBle::connect_and_discover(peripheral).await?;
-    println!("Model: {:?}", session.model());
+    let model = session.model();
+    println!("Model: {model:?}");
     println!("Device information:");
     print_device_info(session.device_info());
 
     match session.read_battery_level().await {
-        Ok(level) => println!("Battery level: {level}%"),
-        Err(error) => println!("Battery level: read failed ({error})"),
+        Ok(level) => println!("Battery level (GATT): {level}%"),
+        Err(error) => println!("Battery level (GATT): read failed ({error})"),
+    }
+
+    let iqos = Iqos::new(session);
+    match iqos.read_device_status(model).await {
+        Ok(status) => print_device_status(&status),
+        Err(error) => println!("Device status: read failed ({error})"),
     }
 
     Ok(())
@@ -262,6 +269,19 @@ fn print_service_summary(peripheral: &btleplug::platform::Peripheral) {
         for characteristic in characteristics {
             println!("    {} {:?}", characteristic.uuid, characteristic.properties);
         }
+    }
+}
+
+#[cfg(feature = "btleplug-support")]
+fn print_device_status(status: &iqos::DeviceStatus) {
+    println!("Stick firmware: {}", status.stick_firmware);
+    match &status.holder_firmware {
+        Some(fw) => println!("Holder firmware: {fw}"),
+        None => println!("Holder firmware: n/a (one-piece model)"),
+    }
+    match status.battery_voltage {
+        Some(v) => println!("Battery voltage: {v:.3} V"),
+        None => println!("Battery voltage: read failed"),
     }
 }
 

@@ -33,8 +33,9 @@ pub mod transports;
 
 pub use error::{Error, Result};
 pub use protocol::{
-    BrightnessLevel, DeviceCapability, DeviceInfo, DeviceModel, DiagnosticData, FirmwareKind,
-    FirmwareVersion, FlexBatteryMode, FlexBatterySettings, FlexPuffSetting, VibrationSettings,
+    BrightnessLevel, DeviceCapability, DeviceInfo, DeviceModel, DeviceStatus, DiagnosticData,
+    FirmwareKind, FirmwareVersion, FlexBatteryMode, FlexBatterySettings, FlexPuffSetting,
+    VibrationSettings,
 };
 pub use transport::{Transport, TransportKind};
 
@@ -370,6 +371,26 @@ impl<T: Transport> Iqos<T> {
             .ok_or_else(|| {
                 Error::ProtocolDecode("battery voltage not present in response".to_string())
             })
+    }
+
+    /// Read a device status snapshot: stick firmware, holder firmware (folder-type only),
+    /// and battery voltage.
+    ///
+    /// Firmware reads are fatal — they propagate errors. Battery voltage uses `.ok()` so a
+    /// failed diagnostic read yields `None` rather than aborting the whole status read.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either firmware request fails or the response cannot be decoded.
+    pub async fn read_device_status(&self, model: DeviceModel) -> Result<DeviceStatus> {
+        let stick_firmware = self.read_firmware_version(FirmwareKind::Stick).await?;
+        let holder_firmware = if model.supports_holder_features() {
+            Some(self.read_firmware_version(FirmwareKind::Holder).await?)
+        } else {
+            None
+        };
+        let battery_voltage = self.read_battery_voltage().await.ok();
+        Ok(DeviceStatus { stick_firmware, holder_firmware, battery_voltage })
     }
 
     /// Trigger an immediate vibration burst on the device.
@@ -1074,5 +1095,91 @@ mod tests {
             iqos.transport().recorded_sends().as_slice(),
             &[protocol::STOP_VIBRATE_COMMAND.to_vec()],
         );
+    }
+
+    #[test]
+    fn read_device_status_for_one_piece_model_sends_stick_firmware_and_battery() {
+        // stick firmware response, then battery voltage response
+        let transport = MockTransport::with_responses([
+            Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8, 0x10, 0x00, 0x00]),
+        ]);
+        let iqos = Iqos::new(transport);
+
+        let status = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
+            .expect("one-piece status should succeed");
+
+        assert_eq!(
+            status.stick_firmware,
+            FirmwareVersion { major: 2, minor: 5, patch: 7, year: 24 }
+        );
+        assert!(status.holder_firmware.is_none());
+        assert!(status.battery_voltage.is_some());
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[
+                protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::LOAD_BATTERY_VOLTAGE_COMMAND.to_vec(),
+            ],
+        );
+    }
+
+    #[test]
+    fn read_device_status_for_folder_model_sends_both_firmware_commands() {
+        // stick firmware, holder firmware, battery voltage
+        let transport = MockTransport::with_responses([
+            Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Ok(vec![0x00, 0x08, 0x88, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x19]),
+            Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8, 0x10, 0x00, 0x00]),
+        ]);
+        let iqos = Iqos::new(transport);
+
+        let status = block_on(iqos.read_device_status(DeviceModel::Iluma))
+            .expect("folder status should succeed");
+
+        assert_eq!(
+            status.stick_firmware,
+            FirmwareVersion { major: 2, minor: 5, patch: 7, year: 24 }
+        );
+        assert_eq!(
+            status.holder_firmware,
+            Some(FirmwareVersion { major: 1, minor: 2, patch: 3, year: 25 }),
+        );
+        assert!(status.battery_voltage.is_some());
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[
+                protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::LOAD_HOLDER_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::LOAD_BATTERY_VOLTAGE_COMMAND.to_vec(),
+            ],
+        );
+    }
+
+    #[test]
+    fn read_device_status_battery_failure_yields_none_not_error() {
+        // stick firmware ok, battery fails
+        let transport = MockTransport::with_responses([
+            Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Err(Error::Transport("battery read failed".to_string())),
+        ]);
+        let iqos = Iqos::new(transport);
+
+        let status = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
+            .expect("battery failure should not abort status read");
+
+        assert!(status.battery_voltage.is_none());
+    }
+
+    #[test]
+    fn read_device_status_propagates_stick_firmware_error() {
+        let iqos = Iqos::new(MockTransport::with_responses([Err(Error::Transport(
+            "ble error".to_string(),
+        ))]));
+
+        let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
+            .expect_err("stick firmware error should surface");
+
+        assert!(matches!(error, Error::Transport(_)));
     }
 }

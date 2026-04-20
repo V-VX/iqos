@@ -9,6 +9,7 @@ mod flexbattery;
 mod flexpuff;
 mod gesture;
 mod lock;
+mod status;
 mod types;
 mod vibration;
 
@@ -40,6 +41,7 @@ pub use gesture::{
     LOAD_AUTOSTART_COMMAND, autostart_command, autostart_from_response, smartgesture_command,
 };
 pub use lock::{lock_commands, unlock_commands};
+pub use status::DeviceStatus;
 pub use types::{DeviceCapability, DeviceInfo, DeviceModel};
 pub use vibration::{
     LOAD_VIBRATE_CHARGE_START_COMMAND, LOAD_VIBRATION_SETTINGS_COMMAND, VibrationSettings,
