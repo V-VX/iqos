@@ -24,4 +24,5 @@ CLAUDE.md
 .claude-*
 .codex
 docs/packet_analysis
+docs/firmware_extraction
 skills
