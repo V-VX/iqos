@@ -1129,7 +1129,7 @@ mod tests {
     }
 
     #[test]
-    fn read_device_status_for_folder_model_sends_both_firmware_commands() {
+    fn read_device_status_for_holder_model_sends_both_firmware_commands() {
         // stick firmware, holder firmware, battery voltage
         let transport = MockTransport::with_responses([
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
@@ -1139,7 +1139,7 @@ mod tests {
         let iqos = Iqos::new(transport);
 
         let status = block_on(iqos.read_device_status(DeviceModel::Iluma))
-            .expect("folder status should succeed");
+            .expect("holder model status should succeed");
 
         assert_eq!(
             status.stick_firmware,
@@ -1161,7 +1161,7 @@ mod tests {
     }
 
     #[test]
-    fn read_device_status_for_prime_folder_model_sends_holder_firmware_command() {
+    fn read_device_status_for_prime_holder_model_sends_holder_firmware_command() {
         let transport = MockTransport::with_responses([
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
             Ok(vec![0x00, 0x08, 0x88, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x19]),
@@ -1170,7 +1170,7 @@ mod tests {
         let iqos = Iqos::new(transport);
 
         let status = block_on(iqos.read_device_status(DeviceModel::IlumaPrime))
-            .expect("prime folder status should succeed");
+            .expect("prime holder model status should succeed");
 
         assert_eq!(
             status.holder_firmware,
