@@ -97,7 +97,7 @@ impl<T: Transport> Iqos<T> {
 
     /// Read the current `FlexPuff` setting.
     ///
-    /// `FlexPuff` is supported on ILUMA and ILUMA i holder-based models.
+    /// `FlexPuff` is supported on ILUMA i and ILUMA i PRIME.
     ///
     /// # Errors
     ///
