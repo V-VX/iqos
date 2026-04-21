@@ -122,18 +122,19 @@ async fn inspect_device(name_filter: Option<&str>) -> Result<(), Box<dyn std::er
 
     let session = IqosBle::connect_and_discover(peripheral).await?;
     let model = session.model();
-    println!("Model: {model:?}");
-    println!("Device information:");
-    print_device_info(session.device_info());
+    let device_info = session.device_info().clone();
 
-    match session.read_battery_level().await {
-        Ok(level) => println!("Battery level (GATT): {level}%"),
-        Err(error) => println!("Battery level (GATT): read failed ({error})"),
-    }
+    let battery_level = session.read_battery_level().await;
 
     let iqos = Iqos::new(session);
-    match iqos.read_device_status(model).await {
-        Ok(status) => print_device_status(&status),
+    match iqos.read_device_status(model, device_info).await {
+        Ok(status) => {
+            print_device_status(&status);
+            match battery_level {
+                Ok(level) => println!("Battery level (GATT): {level}%"),
+                Err(error) => println!("Battery level (GATT): read failed ({error})"),
+            }
+        }
         Err(error) => println!("Device status: read failed ({error})"),
     }
 
@@ -274,23 +275,30 @@ fn print_service_summary(peripheral: &btleplug::platform::Peripheral) {
 
 #[cfg(feature = "btleplug-support")]
 fn print_device_status(status: &iqos::DeviceStatus) {
-    println!("Stick firmware: {}", status.stick_firmware);
-    match &status.holder_firmware {
-        Some(fw) => println!("Holder firmware: {fw}"),
-        None => println!("Holder firmware: n/a (no holder support)"),
-    }
-    match status.battery_voltage {
-        Some(v) => println!("Battery voltage: {v:.3} V"),
-        None => println!("Battery voltage: read failed"),
-    }
-}
+    let info = &status.device_info;
+    let na = "(missing)";
 
-#[cfg(feature = "btleplug-support")]
-fn print_device_info(info: &iqos::DeviceInfo) {
-    println!("  model number: {}", info.model_number.as_deref().unwrap_or("(missing)"));
-    println!("  serial number: {}", info.serial_number.as_deref().unwrap_or("(missing)"));
-    println!("  software revision: {}", info.software_revision.as_deref().unwrap_or("(missing)"));
-    println!("  manufacturer: {}", info.manufacturer_name.as_deref().unwrap_or("(missing)"));
+    println!("Model:         {:?}", status.model);
+    println!("Model Number:  {}", info.model_number.as_deref().unwrap_or(na));
+    println!("Serial Number: {}", info.serial_number.as_deref().unwrap_or(na));
+    println!("Manufacturer:  {}", info.manufacturer_name.as_deref().unwrap_or(na));
+
+    if status.holder_firmware.is_some() {
+        println!("Firmware:      {}", status.stick_firmware);
+        println!();
+        println!("Stick:");
+        println!("  Software Revision: {}", info.software_revision.as_deref().unwrap_or(na));
+        println!("Holder:");
+        println!("  Firmware: {}", status.holder_firmware.as_ref().unwrap());
+    } else {
+        println!("Software Rev:  {}", info.software_revision.as_deref().unwrap_or(na));
+        println!("Firmware:      {}", status.stick_firmware);
+    }
+
+    match status.battery_voltage {
+        Some(v) => println!("Battery:       {v:.3} V"),
+        None => println!("Battery:       read failed"),
+    }
 }
 
 #[cfg(test)]

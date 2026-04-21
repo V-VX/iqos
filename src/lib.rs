@@ -373,8 +373,11 @@ impl<T: Transport> Iqos<T> {
             })
     }
 
-    /// Read a device status snapshot: stick firmware, holder firmware (holder models only),
-    /// and battery voltage.
+    /// Read a device status snapshot combining GATT metadata and SCP firmware reads.
+    ///
+    /// The caller supplies `model` and `device_info` — both already available on the BLE session
+    /// after `connect_and_discover`. This method then performs the SCP reads (stick firmware,
+    /// holder firmware for holder-capable models, battery voltage).
     ///
     /// Firmware reads are fatal — they propagate errors. Battery voltage transport failures
     /// yield `None`; protocol decode errors still propagate.
@@ -382,7 +385,11 @@ impl<T: Transport> Iqos<T> {
     /// # Errors
     ///
     /// Returns an error if either firmware request fails or the response cannot be decoded.
-    pub async fn read_device_status(&self, model: DeviceModel) -> Result<DeviceStatus> {
+    pub async fn read_device_status(
+        &self,
+        model: DeviceModel,
+        device_info: DeviceInfo,
+    ) -> Result<DeviceStatus> {
         let stick_firmware = self.read_firmware_version(FirmwareKind::Stick).await?;
         let holder_firmware = if model.supports_holder_features() {
             Some(self.read_firmware_version(FirmwareKind::Holder).await?)
@@ -394,7 +401,7 @@ impl<T: Transport> Iqos<T> {
             Err(Error::Transport(_)) => None,
             Err(error) => return Err(error),
         };
-        Ok(DeviceStatus { stick_firmware, holder_firmware, battery_voltage })
+        Ok(DeviceStatus { model, device_info, stick_firmware, holder_firmware, battery_voltage })
     }
 
     /// Trigger an immediate vibration burst on the device.
@@ -1110,8 +1117,9 @@ mod tests {
         ]);
         let iqos = Iqos::new(transport);
 
-        let status = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
-            .expect("one-piece status should succeed");
+        let status =
+            block_on(iqos.read_device_status(DeviceModel::IlumaOne, DeviceInfo::default()))
+                .expect("one-piece status should succeed");
 
         assert_eq!(
             status.stick_firmware,
@@ -1138,7 +1146,7 @@ mod tests {
         ]);
         let iqos = Iqos::new(transport);
 
-        let status = block_on(iqos.read_device_status(DeviceModel::Iluma))
+        let status = block_on(iqos.read_device_status(DeviceModel::Iluma, DeviceInfo::default()))
             .expect("holder model status should succeed");
 
         assert_eq!(
@@ -1169,8 +1177,9 @@ mod tests {
         ]);
         let iqos = Iqos::new(transport);
 
-        let status = block_on(iqos.read_device_status(DeviceModel::IlumaPrime))
-            .expect("prime holder model status should succeed");
+        let status =
+            block_on(iqos.read_device_status(DeviceModel::IlumaPrime, DeviceInfo::default()))
+                .expect("prime holder model status should succeed");
 
         assert_eq!(
             status.holder_firmware,
@@ -1195,8 +1204,9 @@ mod tests {
         ]);
         let iqos = Iqos::new(transport);
 
-        let status = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
-            .expect("battery failure should not abort status read");
+        let status =
+            block_on(iqos.read_device_status(DeviceModel::IlumaOne, DeviceInfo::default()))
+                .expect("battery failure should not abort status read");
 
         assert!(status.battery_voltage.is_none());
     }
@@ -1209,7 +1219,7 @@ mod tests {
         ]);
         let iqos = Iqos::new(transport);
 
-        let error = block_on(iqos.read_device_status(DeviceModel::Iluma))
+        let error = block_on(iqos.read_device_status(DeviceModel::Iluma, DeviceInfo::default()))
             .expect_err("holder firmware error should surface");
 
         assert!(matches!(error, Error::Transport(message) if message == "holder read failed"));
@@ -1230,7 +1240,7 @@ mod tests {
         ]);
         let iqos = Iqos::new(transport);
 
-        let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
+        let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne, DeviceInfo::default()))
             .expect_err("battery decode error should surface");
 
         assert!(matches!(error, Error::ProtocolDecode(_)));
@@ -1242,7 +1252,7 @@ mod tests {
             "ble error".to_string(),
         ))]));
 
-        let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne))
+        let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne, DeviceInfo::default()))
             .expect_err("stick firmware error should surface");
 
         assert!(matches!(error, Error::Transport(_)));
