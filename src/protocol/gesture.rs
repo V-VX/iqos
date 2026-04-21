@@ -12,7 +12,7 @@ pub(crate) const SMARTGESTURE_DISABLE_COMMAND: [u8; 9] =
 
 /// Command used to enable Auto Start.
 ///
-/// Auto Start is supported on IQOS ILUMA and ILUMA i holder-based models.
+/// Auto Start is supported on the IQOS ILUMA i series.
 pub(crate) const AUTOSTART_ENABLE_COMMAND: [u8; 9] =
     [0x00, 0xC9, 0x47, 0x24, 0x01, 0x01, 0x00, 0x00, 0x3F];
 

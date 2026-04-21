@@ -188,7 +188,7 @@ impl<T: Transport> Iqos<T> {
 
     /// Enable or disable Auto Start for the provided model.
     ///
-    /// Auto Start is only supported on holder-based ILUMA and ILUMA i models.
+    /// Auto Start is only supported on the ILUMA i series.
     ///
     /// # Errors
     ///
@@ -205,7 +205,7 @@ impl<T: Transport> Iqos<T> {
 
     /// Read the current Auto Start setting for the provided model.
     ///
-    /// Auto Start is only supported on holder-based ILUMA and ILUMA i models.
+    /// Auto Start is only supported on the ILUMA i series.
     ///
     /// # Errors
     ///
@@ -1070,7 +1070,7 @@ mod tests {
     fn set_autostart_enable_sends_correct_command() {
         let iqos = Iqos::new(MockTransport::with_responses([]));
 
-        block_on(iqos.set_autostart(DeviceModel::Iluma, true))
+        block_on(iqos.set_autostart(DeviceModel::IlumaIOne, true))
             .expect("set autostart enabled should succeed");
 
         assert_eq!(
@@ -1096,7 +1096,7 @@ mod tests {
     fn set_autostart_rejects_unsupported_model() {
         let iqos = Iqos::new(MockTransport::with_responses([]));
 
-        let error = block_on(iqos.set_autostart(DeviceModel::IlumaOne, true))
+        let error = block_on(iqos.set_autostart(DeviceModel::Iluma, true))
             .expect_err("unsupported model should return error");
 
         assert!(matches!(error, Error::Unsupported(_)));
@@ -1110,7 +1110,7 @@ mod tests {
         let iqos = Iqos::new(transport);
 
         let enabled =
-            block_on(iqos.read_autostart(DeviceModel::Iluma)).expect("autostart should parse");
+            block_on(iqos.read_autostart(DeviceModel::IlumaI)).expect("autostart should parse");
 
         assert!(enabled);
         assert_eq!(
@@ -1123,7 +1123,7 @@ mod tests {
     fn read_autostart_rejects_unsupported_model() {
         let iqos = Iqos::new(MockTransport::with_responses([]));
 
-        let error = block_on(iqos.read_autostart(DeviceModel::IlumaOne))
+        let error = block_on(iqos.read_autostart(DeviceModel::Iluma))
             .expect_err("unsupported model should return error");
 
         assert!(matches!(error, Error::Unsupported(_)));
@@ -1135,7 +1135,7 @@ mod tests {
             "transport down".to_string(),
         ))]));
 
-        let error = block_on(iqos.read_autostart(DeviceModel::Iluma))
+        let error = block_on(iqos.read_autostart(DeviceModel::IlumaIPrime))
             .expect_err("transport error should surface");
 
         assert!(matches!(error, Error::Transport(message) if message == "transport down"));

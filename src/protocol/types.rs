@@ -69,7 +69,8 @@ impl DeviceModel {
     /// Capability matrix:
     /// - `Brightness`, `Vibration`, `DeviceLock` — all known models (non-Unknown).
     /// - `FlexPuff`, `FlexBattery` — ILUMA i and ILUMA i PRIME only.
-    /// - `SmartGesture`, `AutoStart`, `ChargeStartVibration` — holder form-factor models.
+    /// - `AutoStart` — ILUMA i series only.
+    /// - `SmartGesture`, `ChargeStartVibration` — holder form-factor models.
     #[must_use]
     pub const fn supports(self, capability: DeviceCapability) -> bool {
         match capability {
@@ -79,9 +80,10 @@ impl DeviceModel {
             DeviceCapability::FlexPuff | DeviceCapability::FlexBattery => {
                 matches!(self, Self::IlumaI | Self::IlumaIPrime)
             }
-            DeviceCapability::SmartGesture
-            | DeviceCapability::AutoStart
-            | DeviceCapability::ChargeStartVibration => self.supports_holder_features(),
+            DeviceCapability::AutoStart => self.is_iluma_i_family(),
+            DeviceCapability::SmartGesture | DeviceCapability::ChargeStartVibration => {
+                self.supports_holder_features()
+            }
         }
     }
 
@@ -188,7 +190,7 @@ mod tests {
             (DeviceCapability::FlexPuff, [false, false, false, false, true, true, false]),
             (DeviceCapability::FlexBattery, [false, false, false, false, true, true, false]),
             (DeviceCapability::SmartGesture, [false, true, true, false, true, true, false]),
-            (DeviceCapability::AutoStart, [false, true, true, false, true, true, false]),
+            (DeviceCapability::AutoStart, [false, false, false, true, true, true, false]),
             (DeviceCapability::ChargeStartVibration, [false, true, true, false, true, true, false]),
         ];
 
