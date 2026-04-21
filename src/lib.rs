@@ -35,7 +35,7 @@ pub use error::{Error, Result};
 pub use protocol::{
     BrightnessLevel, DeviceCapability, DeviceInfo, DeviceModel, DeviceStatus, DiagnosticData,
     FirmwareKind, FirmwareVersion, FlexBatteryMode, FlexBatterySettings, FlexPuffSetting,
-    VibrationSettings,
+    ProductNumberKind, VibrationSettings,
 };
 pub use transport::{Transport, TransportKind};
 
@@ -289,6 +289,17 @@ impl<T: Transport> Iqos<T> {
         FirmwareVersion::from_response(&response, kind)
     }
 
+    /// Read the product number for the selected IQOS component.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transport request fails or the response frame
+    /// cannot be decoded as a product-number response for the requested kind.
+    pub async fn read_product_number(&self, kind: ProductNumberKind) -> Result<String> {
+        let response = self.transport.request(kind.command()).await?;
+        protocol::product_number_from_response(&response, kind)
+    }
+
     /// Read the current vibration settings for the provided model.
     ///
     /// Holder-based models require an additional request to retrieve the
@@ -390,18 +401,30 @@ impl<T: Transport> Iqos<T> {
         model: DeviceModel,
         device_info: DeviceInfo,
     ) -> Result<DeviceStatus> {
+        let product_number = self.read_product_number(ProductNumberKind::Stick).await?;
         let stick_firmware = self.read_firmware_version(FirmwareKind::Stick).await?;
-        let holder_firmware = if model.supports_holder_features() {
-            Some(self.read_firmware_version(FirmwareKind::Holder).await?)
+        let (holder_product_number, holder_firmware) = if model.supports_holder_features() {
+            (
+                Some(self.read_product_number(ProductNumberKind::Holder).await?),
+                Some(self.read_firmware_version(FirmwareKind::Holder).await?),
+            )
         } else {
-            None
+            (None, None)
         };
         let battery_voltage = match self.read_battery_voltage().await {
             Ok(voltage) => Some(voltage),
             Err(Error::Transport(_)) => None,
             Err(error) => return Err(error),
         };
-        Ok(DeviceStatus { model, device_info, stick_firmware, holder_firmware, battery_voltage })
+        Ok(DeviceStatus {
+            model,
+            device_info,
+            product_number,
+            stick_firmware,
+            holder_product_number,
+            holder_firmware,
+            battery_voltage,
+        })
     }
 
     /// Trigger an immediate vibration burst on the device.
@@ -556,6 +579,44 @@ mod tests {
         assert_eq!(
             iqos.transport().recorded_requests().as_slice(),
             &[protocol::LOAD_HOLDER_FIRMWARE_VERSION_COMMAND.to_vec()],
+        );
+    }
+
+    #[test]
+    fn read_product_number_uses_expected_request_and_parses_stick_response() {
+        let transport = MockTransport::with_responses([Ok([
+            &[0x00, 0xC0, 0x88, 0x03][..],
+            b"ABCD123456",
+            &[0xAA],
+        ]
+        .concat())]);
+        let iqos = Iqos::new(transport);
+
+        let product_number = block_on(iqos.read_product_number(ProductNumberKind::Stick))
+            .expect("stick product number should parse");
+
+        assert_eq!(product_number, "ABCD123456");
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[protocol::PRODUCT_NUMBER_COMMAND.to_vec()],
+        );
+    }
+
+    #[test]
+    fn read_product_number_uses_expected_request_and_parses_holder_response() {
+        let transport =
+            MockTransport::with_responses([Ok(
+                [&[0x00, 0x08, 0x88, 0x03][..], b"HOLDER123456"].concat()
+            )]);
+        let iqos = Iqos::new(transport);
+
+        let product_number = block_on(iqos.read_product_number(ProductNumberKind::Holder))
+            .expect("holder product number should parse");
+
+        assert_eq!(product_number, "HOLDER123456");
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[protocol::HOLDER_PRODUCT_NUMBER_COMMAND.to_vec()],
         );
     }
 
@@ -1110,8 +1171,9 @@ mod tests {
 
     #[test]
     fn read_device_status_for_one_piece_model_sends_stick_firmware_and_battery() {
-        // stick firmware response, then battery voltage response
+        // product number, stick firmware response, then battery voltage response
         let transport = MockTransport::with_responses([
+            Ok([&[0x00, 0xC0, 0x88, 0x03][..], b"ONE123456", &[0xAA]].concat()),
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
             Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8, 0x10, 0x00, 0x00]),
         ]);
@@ -1125,11 +1187,14 @@ mod tests {
             status.stick_firmware,
             FirmwareVersion { major: 2, minor: 5, patch: 7, year: 24 }
         );
+        assert_eq!(status.product_number, "ONE123456");
+        assert!(status.holder_product_number.is_none());
         assert!(status.holder_firmware.is_none());
         assert!(status.battery_voltage.is_some());
         assert_eq!(
             iqos.transport().recorded_requests().as_slice(),
             &[
+                protocol::PRODUCT_NUMBER_COMMAND.to_vec(),
                 protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
                 protocol::LOAD_BATTERY_VOLTAGE_COMMAND.to_vec(),
             ],
@@ -1138,9 +1203,11 @@ mod tests {
 
     #[test]
     fn read_device_status_for_holder_model_sends_both_firmware_commands() {
-        // stick firmware, holder firmware, battery voltage
+        // stick product number, stick firmware, holder product number, holder firmware, battery voltage
         let transport = MockTransport::with_responses([
+            Ok([&[0x00, 0xC0, 0x88, 0x03][..], b"STICK12345", &[0xAA]].concat()),
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Ok([&[0x00, 0x08, 0x88, 0x03][..], b"HOLDER12345"].concat()),
             Ok(vec![0x00, 0x08, 0x88, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x19]),
             Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8, 0x10, 0x00, 0x00]),
         ]);
@@ -1157,11 +1224,15 @@ mod tests {
             status.holder_firmware,
             Some(FirmwareVersion { major: 1, minor: 2, patch: 3, year: 25 }),
         );
+        assert_eq!(status.product_number, "STICK12345");
+        assert_eq!(status.holder_product_number.as_deref(), Some("HOLDER12345"));
         assert!(status.battery_voltage.is_some());
         assert_eq!(
             iqos.transport().recorded_requests().as_slice(),
             &[
+                protocol::PRODUCT_NUMBER_COMMAND.to_vec(),
                 protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::HOLDER_PRODUCT_NUMBER_COMMAND.to_vec(),
                 protocol::LOAD_HOLDER_FIRMWARE_VERSION_COMMAND.to_vec(),
                 protocol::LOAD_BATTERY_VOLTAGE_COMMAND.to_vec(),
             ],
@@ -1171,7 +1242,9 @@ mod tests {
     #[test]
     fn read_device_status_for_prime_holder_model_sends_holder_firmware_command() {
         let transport = MockTransport::with_responses([
+            Ok([&[0x00, 0xC0, 0x88, 0x03][..], b"STICK12345", &[0xAA]].concat()),
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Ok([&[0x00, 0x08, 0x88, 0x03][..], b"HOLDER12345"].concat()),
             Ok(vec![0x00, 0x08, 0x88, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x19]),
             Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8, 0x10, 0x00, 0x00]),
         ]);
@@ -1188,7 +1261,9 @@ mod tests {
         assert_eq!(
             iqos.transport().recorded_requests().as_slice(),
             &[
+                protocol::PRODUCT_NUMBER_COMMAND.to_vec(),
                 protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::HOLDER_PRODUCT_NUMBER_COMMAND.to_vec(),
                 protocol::LOAD_HOLDER_FIRMWARE_VERSION_COMMAND.to_vec(),
                 protocol::LOAD_BATTERY_VOLTAGE_COMMAND.to_vec(),
             ],
@@ -1197,8 +1272,9 @@ mod tests {
 
     #[test]
     fn read_device_status_battery_failure_yields_none_not_error() {
-        // stick firmware ok, battery fails
+        // product number and stick firmware ok, battery fails
         let transport = MockTransport::with_responses([
+            Ok([&[0x00, 0xC0, 0x88, 0x03][..], b"ONE123456", &[0xAA]].concat()),
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
             Err(Error::Transport("battery read failed".to_string())),
         ]);
@@ -1214,7 +1290,9 @@ mod tests {
     #[test]
     fn read_device_status_propagates_holder_firmware_error() {
         let transport = MockTransport::with_responses([
+            Ok([&[0x00, 0xC0, 0x88, 0x03][..], b"STICK12345", &[0xAA]].concat()),
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
+            Ok([&[0x00, 0x08, 0x88, 0x03][..], b"HOLDER12345"].concat()),
             Err(Error::Transport("holder read failed".to_string())),
         ]);
         let iqos = Iqos::new(transport);
@@ -1226,7 +1304,9 @@ mod tests {
         assert_eq!(
             iqos.transport().recorded_requests().as_slice(),
             &[
+                protocol::PRODUCT_NUMBER_COMMAND.to_vec(),
                 protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+                protocol::HOLDER_PRODUCT_NUMBER_COMMAND.to_vec(),
                 protocol::LOAD_HOLDER_FIRMWARE_VERSION_COMMAND.to_vec(),
             ],
         );
@@ -1235,6 +1315,7 @@ mod tests {
     #[test]
     fn read_device_status_propagates_battery_decode_errors() {
         let transport = MockTransport::with_responses([
+            Ok([&[0x00, 0xC0, 0x88, 0x03][..], b"ONE123456", &[0xAA]].concat()),
             Ok(vec![0x00, 0xC0, 0x88, 0x00, 0x00, 0x00, 0x02, 0x05, 0x07, 0x18]),
             Ok(vec![0x00, 0x08, 0x88, 0x21, 0x00, 0xA8]),
         ]);
@@ -1247,14 +1328,37 @@ mod tests {
     }
 
     #[test]
-    fn read_device_status_propagates_stick_firmware_error() {
+    fn read_device_status_propagates_product_number_error() {
         let iqos = Iqos::new(MockTransport::with_responses([Err(Error::Transport(
             "ble error".to_string(),
         ))]));
 
         let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne, DeviceInfo::default()))
-            .expect_err("stick firmware error should surface");
+            .expect_err("product number error should surface");
 
         assert!(matches!(error, Error::Transport(_)));
+    }
+
+    #[test]
+    fn read_device_status_propagates_stick_firmware_error() {
+        let transport = MockTransport::with_responses([
+            Ok([&[0x00, 0xC0, 0x88, 0x03][..], b"ONE123456", &[0xAA]].concat()),
+            Err(Error::Transport("stick firmware read failed".to_string())),
+        ]);
+        let iqos = Iqos::new(transport);
+
+        let error = block_on(iqos.read_device_status(DeviceModel::IlumaOne, DeviceInfo::default()))
+            .expect_err("stick firmware error should surface");
+
+        assert!(
+            matches!(error, Error::Transport(message) if message == "stick firmware read failed")
+        );
+        assert_eq!(
+            iqos.transport().recorded_requests().as_slice(),
+            &[
+                protocol::PRODUCT_NUMBER_COMMAND.to_vec(),
+                protocol::LOAD_STICK_FIRMWARE_VERSION_COMMAND.to_vec(),
+            ],
+        );
     }
 }

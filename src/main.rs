@@ -283,16 +283,19 @@ fn print_device_status(status: &iqos::DeviceStatus) {
     println!("Serial Number: {}", info.serial_number.as_deref().unwrap_or(na));
     println!("Manufacturer:  {}", info.manufacturer_name.as_deref().unwrap_or(na));
 
-    if status.holder_firmware.is_some() {
+    if let Some(holder_firmware) = &status.holder_firmware {
         println!("Firmware:      {}", status.stick_firmware);
         println!();
         println!("Stick:");
+        println!("  Product Number:    {}", status.product_number);
         println!("  Software Revision: {}", info.software_revision.as_deref().unwrap_or(na));
         println!("Holder:");
-        println!("  Firmware: {}", status.holder_firmware.as_ref().unwrap());
+        println!("  Product Number:    {}", status.holder_product_number.as_deref().unwrap_or(na));
+        println!("  Firmware:          {holder_firmware}");
     } else {
         println!("Software Rev:  {}", info.software_revision.as_deref().unwrap_or(na));
         println!("Firmware:      {}", status.stick_firmware);
+        println!("Product Number: {}", status.product_number);
     }
 
     match status.battery_voltage {
