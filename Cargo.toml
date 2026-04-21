@@ -1,6 +1,6 @@
 [package]
 name = "iqos"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 authors = ["VVX Club", "VVX Supp"]
 description = "A Rust crate for controlling IQOS devices over BLE and USB"
