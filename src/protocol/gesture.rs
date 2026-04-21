@@ -2,7 +2,7 @@ use crate::{Error, Result};
 
 /// Command used to enable Smart Gesture.
 ///
-/// Smart Gesture is supported on IQOS ILUMA and ILUMA i holder-based models.
+/// Smart Gesture is supported on original IQOS ILUMA holder models and the ILUMA i series.
 pub(crate) const SMARTGESTURE_ENABLE_COMMAND: [u8; 9] =
     [0x00, 0xC9, 0x47, 0x24, 0x04, 0x01, 0x00, 0x00, 0x3C];
 

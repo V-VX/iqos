@@ -69,8 +69,9 @@ impl DeviceModel {
     /// Capability matrix:
     /// - `Brightness`, `Vibration`, `DeviceLock` — all known models (non-Unknown).
     /// - `FlexPuff`, `FlexBattery` — ILUMA i and ILUMA i PRIME only.
+    /// - `SmartGesture` — original ILUMA holder models and the ILUMA i series.
     /// - `AutoStart` — ILUMA i series only.
-    /// - `SmartGesture`, `ChargeStartVibration` — holder form-factor models.
+    /// - `ChargeStartVibration` — holder form-factor models.
     #[must_use]
     pub const fn supports(self, capability: DeviceCapability) -> bool {
         match capability {
@@ -80,10 +81,11 @@ impl DeviceModel {
             DeviceCapability::FlexPuff | DeviceCapability::FlexBattery => {
                 matches!(self, Self::IlumaI | Self::IlumaIPrime)
             }
-            DeviceCapability::AutoStart => self.is_iluma_i_family(),
-            DeviceCapability::SmartGesture | DeviceCapability::ChargeStartVibration => {
-                self.supports_holder_features()
+            DeviceCapability::SmartGesture => {
+                matches!(self, Self::Iluma | Self::IlumaPrime) || self.is_iluma_i_family()
             }
+            DeviceCapability::AutoStart => self.is_iluma_i_family(),
+            DeviceCapability::ChargeStartVibration => self.supports_holder_features(),
         }
     }
 
@@ -189,7 +191,7 @@ mod tests {
             (DeviceCapability::DeviceLock, [true, true, true, true, true, true, false]),
             (DeviceCapability::FlexPuff, [false, false, false, false, true, true, false]),
             (DeviceCapability::FlexBattery, [false, false, false, false, true, true, false]),
-            (DeviceCapability::SmartGesture, [false, true, true, false, true, true, false]),
+            (DeviceCapability::SmartGesture, [false, true, true, true, true, true, false]),
             (DeviceCapability::AutoStart, [false, false, false, true, true, true, false]),
             (DeviceCapability::ChargeStartVibration, [false, true, true, false, true, true, false]),
         ];

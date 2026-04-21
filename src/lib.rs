@@ -131,7 +131,7 @@ impl<T: Transport> Iqos<T> {
 
     /// Enable or disable Smart Gesture for the provided model.
     ///
-    /// Smart Gesture is only supported on holder-based ILUMA and ILUMA i models.
+    /// Smart Gesture is supported on original ILUMA holder models and the ILUMA i series.
     ///
     /// # Errors
     ///
@@ -1034,7 +1034,7 @@ mod tests {
     fn set_smartgesture_enable_sends_correct_command() {
         let iqos = Iqos::new(MockTransport::with_responses([]));
 
-        block_on(iqos.set_smartgesture(DeviceModel::Iluma, true))
+        block_on(iqos.set_smartgesture(DeviceModel::IlumaIOne, true))
             .expect("set smartgesture enabled should succeed");
 
         assert_eq!(
