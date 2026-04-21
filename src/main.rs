@@ -112,7 +112,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "btleplug-support")]
 async fn inspect_device(name_filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    use iqos::IqosBle;
+    use iqos::{Iqos, IqosBle};
 
     let (peripheral, selected_name) = select_peripheral(name_filter).await?;
     println!("Selected device: {selected_name}");
@@ -121,14 +121,20 @@ async fn inspect_device(name_filter: Option<&str>) -> Result<(), Box<dyn std::er
     print_service_summary(&peripheral);
 
     let session = IqosBle::connect_and_discover(peripheral).await?;
-    println!("Model: {:?}", session.model());
-    println!("Device information:");
-    print_device_info(session.device_info());
+    let model = session.model();
+    let device_info = session.device_info().clone();
 
-    match session.read_battery_level().await {
-        Ok(level) => println!("Battery level: {level}%"),
-        Err(error) => println!("Battery level: read failed ({error})"),
+    let battery_level = session.read_battery_level().await;
+
+    let iqos = Iqos::new(session);
+    match iqos.read_device_status(model, device_info).await {
+        Ok(status) => {
+            print_device_status(&status);
+        }
+        Err(error) => println!("Device status: read failed ({error})"),
     }
+
+    println!("{}", battery_level_line(&battery_level));
 
     Ok(())
 }
@@ -266,16 +272,47 @@ fn print_service_summary(peripheral: &btleplug::platform::Peripheral) {
 }
 
 #[cfg(feature = "btleplug-support")]
-fn print_device_info(info: &iqos::DeviceInfo) {
-    println!("  model number: {}", info.model_number.as_deref().unwrap_or("(missing)"));
-    println!("  serial number: {}", info.serial_number.as_deref().unwrap_or("(missing)"));
-    println!("  software revision: {}", info.software_revision.as_deref().unwrap_or("(missing)"));
-    println!("  manufacturer: {}", info.manufacturer_name.as_deref().unwrap_or("(missing)"));
+fn print_device_status(status: &iqos::DeviceStatus) {
+    let info = &status.device_info;
+    let na = "(missing)";
+
+    println!("Model:         {:?}", status.model);
+    println!("Model Number:  {}", info.model_number.as_deref().unwrap_or(na));
+    println!("Serial Number: {}", info.serial_number.as_deref().unwrap_or(na));
+    println!("Manufacturer:  {}", info.manufacturer_name.as_deref().unwrap_or(na));
+
+    if let Some(holder_firmware) = &status.holder_firmware {
+        println!("Firmware:      {}", status.stick_firmware);
+        println!();
+        println!("Stick:");
+        println!("  Product Number:    {}", status.product_number);
+        println!("  Software Revision: {}", info.software_revision.as_deref().unwrap_or(na));
+        println!("Holder:");
+        println!("  Product Number:    {}", status.holder_product_number.as_deref().unwrap_or(na));
+        println!("  Firmware:          {holder_firmware}");
+    } else {
+        println!("Software Rev:  {}", info.software_revision.as_deref().unwrap_or(na));
+        println!("Firmware:      {}", status.stick_firmware);
+        println!("Product Number: {}", status.product_number);
+    }
+
+    match status.battery_voltage {
+        Some(v) => println!("Battery:       {v:.3} V"),
+        None => println!("Battery:       read failed"),
+    }
+}
+
+#[cfg_attr(not(any(feature = "btleplug-support", test)), allow(dead_code))]
+fn battery_level_line(result: &iqos::Result<u8>) -> String {
+    match result {
+        Ok(level) => format!("Battery level (GATT): {level}%"),
+        Err(error) => format!("Battery level (GATT): read failed ({error})"),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CliArgs, Command, ProbeCommand, parse_args};
+    use super::{CliArgs, Command, ProbeCommand, battery_level_line, parse_args};
 
     fn parse(arguments: &[&str]) -> Result<CliArgs, String> {
         parse_args(arguments.iter().map(|value| (*value).to_string()))
@@ -321,5 +358,14 @@ mod tests {
         let error = parse(&["iqos", "inspect", "extra"]).expect_err("extra args should fail");
 
         assert_eq!(error, "invalid command shape");
+    }
+
+    #[test]
+    fn formats_gatt_battery_level_result() {
+        assert_eq!(battery_level_line(&Ok(87)), "Battery level (GATT): 87%");
+        assert_eq!(
+            battery_level_line(&Err(iqos::Error::Transport("read failed".to_string()))),
+            "Battery level (GATT): read failed (transport error: read failed)"
+        );
     }
 }

@@ -23,9 +23,3 @@ pub const SOFTWARE_REVISION_CHAR_UUID_PREFIX: &str = "00002a28";
 
 /// Standard GATT manufacturer name characteristic short UUID.
 pub const MANUFACTURER_NAME_CHAR_UUID_PREFIX: &str = "00002a29";
-
-/// Product number request for the stick/vape unit.
-pub const PRODUCT_NUMBER_COMMAND: [u8; 5] = [0x00, 0xC0, 0x00, 0x03, 0x09];
-
-/// Product number request for the holder unit.
-pub const HOLDER_PRODUCT_NUMBER_COMMAND: [u8; 5] = [0x00, 0xC9, 0x00, 0x03, 0x09];

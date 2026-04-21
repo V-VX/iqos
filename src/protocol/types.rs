@@ -59,13 +59,9 @@ impl DeviceModel {
     }
 
     /// Return whether this model exposes holder-specific metadata and settings.
-    ///
-    /// Observed behavior: `iqos_cli` gates holder-scoped settings through
-    /// `is_iluma_or_higher()`, which currently only includes `Iluma` and
-    /// `IlumaI`.
     #[must_use]
     pub const fn supports_holder_features(self) -> bool {
-        matches!(self, Self::Iluma | Self::IlumaI)
+        matches!(self, Self::Iluma | Self::IlumaPrime | Self::IlumaI | Self::IlumaIPrime)
     }
 
     /// Return whether this model supports the requested device capability.
@@ -73,7 +69,7 @@ impl DeviceModel {
     /// Capability matrix:
     /// - `Brightness`, `Vibration`, `DeviceLock` — all known models (non-Unknown).
     /// - `FlexPuff`, `FlexBattery` — ILUMA i and ILUMA i PRIME only.
-    /// - `SmartGesture`, `AutoStart` — ILUMA and ILUMA i (holder form-factor only).
+    /// - `SmartGesture`, `AutoStart` — holder form-factor models.
     #[must_use]
     pub const fn supports(self, capability: DeviceCapability) -> bool {
         match capability {
@@ -149,6 +145,25 @@ mod tests {
     }
 
     #[test]
+    fn detects_holder_feature_models() {
+        for model in [
+            DeviceModel::Iluma,
+            DeviceModel::IlumaPrime,
+            DeviceModel::IlumaI,
+            DeviceModel::IlumaIPrime,
+        ] {
+            assert!(model.supports_holder_features(), "{model:?} should support holder features");
+        }
+
+        for model in [DeviceModel::IlumaOne, DeviceModel::IlumaIOne, DeviceModel::Unknown] {
+            assert!(
+                !model.supports_holder_features(),
+                "{model:?} should not support holder features"
+            );
+        }
+    }
+
+    #[test]
     fn maps_capabilities_by_model_variation() {
         // Brightness — all known models.
         for model in [
@@ -198,19 +213,36 @@ mod tests {
             );
         }
 
-        // SmartGesture / AutoStart — Iluma and IlumaI (holder form-factor) only.
-        assert!(DeviceModel::IlumaI.supports(DeviceCapability::SmartGesture));
-        assert!(DeviceModel::Iluma.supports(DeviceCapability::SmartGesture));
-        assert!(!DeviceModel::IlumaIPrime.supports(DeviceCapability::SmartGesture));
+        // SmartGesture / AutoStart — holder form-factor models.
+        for model in [
+            DeviceModel::Iluma,
+            DeviceModel::IlumaPrime,
+            DeviceModel::IlumaI,
+            DeviceModel::IlumaIPrime,
+        ] {
+            assert!(model.supports(DeviceCapability::SmartGesture));
+            assert!(model.supports(DeviceCapability::AutoStart));
+        }
+        assert!(!DeviceModel::IlumaOne.supports(DeviceCapability::SmartGesture));
         assert!(!DeviceModel::IlumaIOne.supports(DeviceCapability::SmartGesture));
+        assert!(!DeviceModel::Unknown.supports(DeviceCapability::SmartGesture));
+        assert!(!DeviceModel::IlumaOne.supports(DeviceCapability::AutoStart));
+        assert!(!DeviceModel::IlumaIOne.supports(DeviceCapability::AutoStart));
+        assert!(!DeviceModel::Unknown.supports(DeviceCapability::AutoStart));
     }
 
     #[test]
     fn gates_charge_start_vibration_to_holder_models() {
-        assert!(DeviceModel::Iluma.supports_charge_start_vibration());
-        assert!(DeviceModel::IlumaI.supports_charge_start_vibration());
-        assert!(!DeviceModel::IlumaPrime.supports_charge_start_vibration());
-        assert!(!DeviceModel::IlumaIPrime.supports_charge_start_vibration());
+        for model in [
+            DeviceModel::Iluma,
+            DeviceModel::IlumaPrime,
+            DeviceModel::IlumaI,
+            DeviceModel::IlumaIPrime,
+        ] {
+            assert!(model.supports_charge_start_vibration());
+        }
+        assert!(!DeviceModel::IlumaOne.supports_charge_start_vibration());
         assert!(!DeviceModel::IlumaIOne.supports_charge_start_vibration());
+        assert!(!DeviceModel::Unknown.supports_charge_start_vibration());
     }
 }
