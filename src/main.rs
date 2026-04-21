@@ -130,13 +130,11 @@ async fn inspect_device(name_filter: Option<&str>) -> Result<(), Box<dyn std::er
     match iqos.read_device_status(model, device_info).await {
         Ok(status) => {
             print_device_status(&status);
-            match battery_level {
-                Ok(level) => println!("Battery level (GATT): {level}%"),
-                Err(error) => println!("Battery level (GATT): read failed ({error})"),
-            }
         }
         Err(error) => println!("Device status: read failed ({error})"),
     }
+
+    println!("{}", battery_level_line(&battery_level));
 
     Ok(())
 }
@@ -304,9 +302,17 @@ fn print_device_status(status: &iqos::DeviceStatus) {
     }
 }
 
+#[cfg_attr(not(any(feature = "btleplug-support", test)), allow(dead_code))]
+fn battery_level_line(result: &iqos::Result<u8>) -> String {
+    match result {
+        Ok(level) => format!("Battery level (GATT): {level}%"),
+        Err(error) => format!("Battery level (GATT): read failed ({error})"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{CliArgs, Command, ProbeCommand, parse_args};
+    use super::{CliArgs, Command, ProbeCommand, battery_level_line, parse_args};
 
     fn parse(arguments: &[&str]) -> Result<CliArgs, String> {
         parse_args(arguments.iter().map(|value| (*value).to_string()))
@@ -352,5 +358,14 @@ mod tests {
         let error = parse(&["iqos", "inspect", "extra"]).expect_err("extra args should fail");
 
         assert_eq!(error, "invalid command shape");
+    }
+
+    #[test]
+    fn formats_gatt_battery_level_result() {
+        assert_eq!(battery_level_line(&Ok(87)), "Battery level (GATT): 87%");
+        assert_eq!(
+            battery_level_line(&Err(iqos::Error::Transport("read failed".to_string()))),
+            "Battery level (GATT): read failed (transport error: read failed)"
+        );
     }
 }
