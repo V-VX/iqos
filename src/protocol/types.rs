@@ -69,7 +69,7 @@ impl DeviceModel {
     /// Capability matrix:
     /// - `Brightness`, `Vibration`, `DeviceLock` — all known models (non-Unknown).
     /// - `FlexPuff`, `FlexBattery` — ILUMA i and ILUMA i PRIME only.
-    /// - `SmartGesture`, `AutoStart` — holder form-factor models.
+    /// - `SmartGesture`, `AutoStart`, `ChargeStartVibration` — holder form-factor models.
     #[must_use]
     pub const fn supports(self, capability: DeviceCapability) -> bool {
         match capability {
@@ -79,16 +79,16 @@ impl DeviceModel {
             DeviceCapability::FlexPuff | DeviceCapability::FlexBattery => {
                 matches!(self, Self::IlumaI | Self::IlumaIPrime)
             }
-            DeviceCapability::SmartGesture | DeviceCapability::AutoStart => {
-                self.supports_holder_features()
-            }
+            DeviceCapability::SmartGesture
+            | DeviceCapability::AutoStart
+            | DeviceCapability::ChargeStartVibration => self.supports_holder_features(),
         }
     }
 
     /// Return whether this model supports the charge-start vibration setting.
     #[must_use]
     pub const fn supports_charge_start_vibration(self) -> bool {
-        self.supports_holder_features()
+        self.supports(DeviceCapability::ChargeStartVibration)
     }
 }
 
@@ -106,6 +106,10 @@ pub struct DeviceInfo {
 }
 
 /// Device-level feature capability flags.
+///
+/// This enum is non-exhaustive so downstream code keeps a wildcard arm as
+/// reverse-engineered capabilities evolve.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceCapability {
     /// Brightness control support.
@@ -122,6 +126,8 @@ pub enum DeviceCapability {
     AutoStart,
     /// Lock/unlock support.
     DeviceLock,
+    /// Holder vibration feedback when the stick begins charging.
+    ChargeStartVibration,
 }
 
 #[cfg(test)]
@@ -165,70 +171,36 @@ mod tests {
 
     #[test]
     fn maps_capabilities_by_model_variation() {
-        // Brightness — all known models.
-        for model in [
+        let models = [
             DeviceModel::IlumaOne,
             DeviceModel::Iluma,
             DeviceModel::IlumaPrime,
             DeviceModel::IlumaIOne,
             DeviceModel::IlumaI,
             DeviceModel::IlumaIPrime,
-        ] {
-            assert!(
-                model.supports(DeviceCapability::Brightness),
-                "{model:?} should support Brightness"
-            );
-            assert!(
-                model.supports(DeviceCapability::DeviceLock),
-                "{model:?} should support DeviceLock"
-            );
-            assert!(
-                model.supports(DeviceCapability::Vibration),
-                "{model:?} should support Vibration"
-            );
-        }
-        assert!(!DeviceModel::Unknown.supports(DeviceCapability::Brightness));
-        assert!(!DeviceModel::Unknown.supports(DeviceCapability::DeviceLock));
-        assert!(!DeviceModel::Unknown.supports(DeviceCapability::Vibration));
-
-        // FlexPuff / FlexBattery — IlumaI and IlumaIPrime only.
-        assert!(DeviceModel::IlumaI.supports(DeviceCapability::FlexPuff));
-        assert!(DeviceModel::IlumaIPrime.supports(DeviceCapability::FlexPuff));
-        assert!(DeviceModel::IlumaI.supports(DeviceCapability::FlexBattery));
-        assert!(DeviceModel::IlumaIPrime.supports(DeviceCapability::FlexBattery));
-        for model in [
-            DeviceModel::IlumaOne,
-            DeviceModel::Iluma,
-            DeviceModel::IlumaPrime,
-            DeviceModel::IlumaIOne,
             DeviceModel::Unknown,
-        ] {
-            assert!(
-                !model.supports(DeviceCapability::FlexPuff),
-                "{model:?} should not support FlexPuff"
-            );
-            assert!(
-                !model.supports(DeviceCapability::FlexBattery),
-                "{model:?} should not support FlexBattery"
-            );
-        }
+        ];
 
-        // SmartGesture / AutoStart — holder form-factor models.
-        for model in [
-            DeviceModel::Iluma,
-            DeviceModel::IlumaPrime,
-            DeviceModel::IlumaI,
-            DeviceModel::IlumaIPrime,
-        ] {
-            assert!(model.supports(DeviceCapability::SmartGesture));
-            assert!(model.supports(DeviceCapability::AutoStart));
+        let matrix = [
+            (DeviceCapability::Brightness, [true, true, true, true, true, true, false]),
+            (DeviceCapability::Vibration, [true, true, true, true, true, true, false]),
+            (DeviceCapability::DeviceLock, [true, true, true, true, true, true, false]),
+            (DeviceCapability::FlexPuff, [false, false, false, false, true, true, false]),
+            (DeviceCapability::FlexBattery, [false, false, false, false, true, true, false]),
+            (DeviceCapability::SmartGesture, [false, true, true, false, true, true, false]),
+            (DeviceCapability::AutoStart, [false, true, true, false, true, true, false]),
+            (DeviceCapability::ChargeStartVibration, [false, true, true, false, true, true, false]),
+        ];
+
+        for (capability, expected_by_model) in matrix {
+            for (model, expected) in models.into_iter().zip(expected_by_model) {
+                assert_eq!(
+                    model.supports(capability),
+                    expected,
+                    "{model:?} support for {capability:?}"
+                );
+            }
         }
-        assert!(!DeviceModel::IlumaOne.supports(DeviceCapability::SmartGesture));
-        assert!(!DeviceModel::IlumaIOne.supports(DeviceCapability::SmartGesture));
-        assert!(!DeviceModel::Unknown.supports(DeviceCapability::SmartGesture));
-        assert!(!DeviceModel::IlumaOne.supports(DeviceCapability::AutoStart));
-        assert!(!DeviceModel::IlumaIOne.supports(DeviceCapability::AutoStart));
-        assert!(!DeviceModel::Unknown.supports(DeviceCapability::AutoStart));
     }
 
     #[test]
@@ -240,9 +212,13 @@ mod tests {
             DeviceModel::IlumaIPrime,
         ] {
             assert!(model.supports_charge_start_vibration());
+            assert!(model.supports(DeviceCapability::ChargeStartVibration));
         }
         assert!(!DeviceModel::IlumaOne.supports_charge_start_vibration());
         assert!(!DeviceModel::IlumaIOne.supports_charge_start_vibration());
         assert!(!DeviceModel::Unknown.supports_charge_start_vibration());
+        assert!(!DeviceModel::IlumaOne.supports(DeviceCapability::ChargeStartVibration));
+        assert!(!DeviceModel::IlumaIOne.supports(DeviceCapability::ChargeStartVibration));
+        assert!(!DeviceModel::Unknown.supports(DeviceCapability::ChargeStartVibration));
     }
 }

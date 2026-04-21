@@ -23,8 +23,8 @@ The official IQOS app surfaces only basic status and settings. This library goes
 
 ### Programmatic device control
 
-- Brightness, vibration, FlexPuff
-- FlexBattery mode and Pause Mode _(ILUMA i)_
+- Brightness and vibration
+- FlexPuff, FlexBattery mode, and Pause Mode _(ILUMA i / ILUMA i PRIME)_
 - Smart Gesture and Auto Start
 - Device lock / unlock
 - Firmware version (stick and holder)

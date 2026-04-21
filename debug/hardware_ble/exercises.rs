@@ -172,21 +172,21 @@ pub(crate) async fn lock_unlock(iqos: &Iqos<IqosBle>, model: DeviceModel) -> Tes
     Ok(())
 }
 
-pub(crate) async fn flexpuff(iqos: &Iqos<IqosBle>) -> TestResult {
-    let original = run!("read flexpuff", iqos.read_flexpuff().await);
+pub(crate) async fn flexpuff(iqos: &Iqos<IqosBle>, model: DeviceModel) -> TestResult {
+    let original = run!("read flexpuff", iqos.read_flexpuff(model).await);
     let toggled = FlexPuffSetting::new(!original.is_enabled());
     let label = bool_label(toggled.is_enabled());
 
     println!("    current flexpuff status: {}", bool_label(original.is_enabled()));
     println!("    request: set flexpuff -> {label}");
-    run!(format!("set flexpuff → {label}"), iqos.set_flexpuff(toggled).await);
+    run!(format!("set flexpuff → {label}"), iqos.set_flexpuff(model, toggled).await);
 
-    let read_back = run!("verify flexpuff", iqos.read_flexpuff().await);
+    let read_back = run!("verify flexpuff", iqos.read_flexpuff(model).await);
     if read_back != toggled {
         println!("    verify: flexpuff changed to {} [FAIL]", bool_label(read_back.is_enabled()));
         println!("    request: set flexpuff -> {}", bool_label(original.is_enabled()));
-        let restore_write = iqos.set_flexpuff(original).await;
-        let restore_read = iqos.read_flexpuff().await;
+        let restore_write = iqos.set_flexpuff(model, original).await;
+        let restore_read = iqos.read_flexpuff(model).await;
         return Err(match (restore_write, restore_read) {
             (Ok(()), Ok(restored)) if restored == original => format!(
                 "flexpuff mismatch: expected {:?}, got {:?}; restore verified to {:?}",
@@ -212,9 +212,9 @@ pub(crate) async fn flexpuff(iqos: &Iqos<IqosBle>) -> TestResult {
 
     let orig_label = bool_label(original.is_enabled());
     println!("    request: set flexpuff -> {orig_label}");
-    run!(format!("restore flexpuff → {orig_label}"), iqos.set_flexpuff(original).await);
+    run!(format!("restore flexpuff → {orig_label}"), iqos.set_flexpuff(model, original).await);
 
-    let restored = run!("verify flexpuff restored", iqos.read_flexpuff().await);
+    let restored = run!("verify flexpuff restored", iqos.read_flexpuff(model).await);
     if restored != original {
         return Err(format!(
             "flexpuff restore failed: expected {:?}, got {:?}",

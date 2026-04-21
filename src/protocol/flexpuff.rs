@@ -13,8 +13,8 @@ pub(crate) const FLEXPUFF_DISABLE_COMMAND: [u8; 9] =
 
 /// `FlexPuff` enabled/disabled setting.
 ///
-/// `FlexPuff` is a feature available on IQOS ILUMA and ILUMA i holder-based
-/// models that adjusts puff resistance feedback.
+/// `FlexPuff` is a feature available on IQOS ILUMA i and ILUMA i PRIME that
+/// adjusts puff resistance feedback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FlexPuffSetting {
     enabled: bool,

@@ -9,7 +9,9 @@
 /AGENTS.md
 /docs/plans/
 /docs/packets/
+/docs/rules/
 /.github/copilot-instructions.md
+/package-lock.json
 
 # Nested reference repo artifacts that should not leak into the root project
 /iqos_cli/target
