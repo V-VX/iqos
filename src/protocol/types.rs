@@ -106,6 +106,10 @@ pub struct DeviceInfo {
 }
 
 /// Device-level feature capability flags.
+///
+/// This enum is non-exhaustive so downstream code keeps a wildcard arm as
+/// reverse-engineered capabilities evolve.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceCapability {
     /// Brightness control support.
