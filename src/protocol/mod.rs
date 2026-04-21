@@ -9,6 +9,7 @@ mod flexbattery;
 mod flexpuff;
 mod gesture;
 mod lock;
+mod product;
 mod status;
 mod types;
 mod vibration;
@@ -17,9 +18,9 @@ mod vibration;
 pub const IQOS_PROTOCOL_FAMILY: &str = "iqos";
 
 pub use ble::{
-    BATTERY_CHARACTERISTIC_UUID, DEVICE_INFO_SERVICE_UUID, HOLDER_PRODUCT_NUMBER_COMMAND,
-    IQOS_CORE_SERVICE_UUID, MANUFACTURER_NAME_CHAR_UUID_PREFIX, MODEL_NUMBER_CHAR_UUID_PREFIX,
-    PRODUCT_NUMBER_COMMAND, SCP_CONTROL_CHARACTERISTIC_UUID, SERIAL_NUMBER_CHAR_UUID_PREFIX,
+    BATTERY_CHARACTERISTIC_UUID, DEVICE_INFO_SERVICE_UUID, IQOS_CORE_SERVICE_UUID,
+    MANUFACTURER_NAME_CHAR_UUID_PREFIX, MODEL_NUMBER_CHAR_UUID_PREFIX,
+    SCP_CONTROL_CHARACTERISTIC_UUID, SERIAL_NUMBER_CHAR_UUID_PREFIX,
     SOFTWARE_REVISION_CHAR_UUID_PREFIX,
 };
 pub use brightness::{BrightnessLevel, LOAD_BRIGHTNESS_COMMAND};
@@ -41,6 +42,10 @@ pub use gesture::{
     LOAD_AUTOSTART_COMMAND, autostart_command, autostart_from_response, smartgesture_command,
 };
 pub use lock::{lock_commands, unlock_commands};
+pub use product::{
+    HOLDER_PRODUCT_NUMBER_COMMAND, PRODUCT_NUMBER_COMMAND, ProductNumberKind,
+    product_number_from_response,
+};
 pub use status::DeviceStatus;
 pub use types::{DeviceCapability, DeviceInfo, DeviceModel};
 pub use vibration::{
