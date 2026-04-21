@@ -57,7 +57,7 @@ pub(crate) async fn snapshot(session: &IqosBle, iqos: &Iqos<IqosBle>) -> TestRes
     }
 
     if model.supports(DeviceCapability::FlexPuff) {
-        match iqos.read_flexpuff().await {
+        match iqos.read_flexpuff(model).await {
             Ok(fp) => {
                 println!("  FlexPuff: {}", if fp.is_enabled() { "enabled" } else { "disabled" })
             }
@@ -102,7 +102,7 @@ pub(crate) async fn exercise_all(
     exercise!("lock / unlock", exercises::lock_unlock(iqos, model).await);
 
     if model.supports(DeviceCapability::FlexPuff) {
-        exercise!("flexpuff", exercises::flexpuff(iqos).await);
+        exercise!("flexpuff", exercises::flexpuff(iqos, model).await);
     }
     if model.supports(DeviceCapability::FlexBattery) {
         exercise!("flexbattery", exercises::flexbattery(iqos, model).await);

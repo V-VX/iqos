@@ -101,9 +101,15 @@ impl<T: Transport> Iqos<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the transport request fails or the response frame
-    /// cannot be decoded as a `FlexPuff` response.
-    pub async fn read_flexpuff(&self) -> Result<FlexPuffSetting> {
+    /// Returns an error if the model does not support `FlexPuff`, the transport
+    /// request fails, or the response frame cannot be decoded as a `FlexPuff`
+    /// response.
+    pub async fn read_flexpuff(&self, model: DeviceModel) -> Result<FlexPuffSetting> {
+        if !model.supports(DeviceCapability::FlexPuff) {
+            return Err(Error::Unsupported(format!(
+                "FlexPuff is not supported for model {model:?}"
+            )));
+        }
         let response = self.transport.request(&protocol::LOAD_FLEXPUFF_COMMAND).await?;
         FlexPuffSetting::from_response(&response)
     }
@@ -112,8 +118,14 @@ impl<T: Transport> Iqos<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the transport send fails.
-    pub async fn set_flexpuff(&self, setting: FlexPuffSetting) -> Result<()> {
+    /// Returns an error if the model does not support `FlexPuff`, or if the
+    /// transport send fails.
+    pub async fn set_flexpuff(&self, model: DeviceModel, setting: FlexPuffSetting) -> Result<()> {
+        if !model.supports(DeviceCapability::FlexPuff) {
+            return Err(Error::Unsupported(format!(
+                "FlexPuff is not supported for model {model:?}"
+            )));
+        }
         self.transport.send(setting.write_command()).await
     }
 
@@ -781,7 +793,8 @@ mod tests {
         ])]);
         let iqos = Iqos::new(transport);
 
-        let setting = block_on(iqos.read_flexpuff()).expect("flexpuff should parse");
+        let setting =
+            block_on(iqos.read_flexpuff(DeviceModel::IlumaI)).expect("flexpuff should parse");
 
         assert_eq!(setting, FlexPuffSetting::new(true));
         assert_eq!(
@@ -794,7 +807,7 @@ mod tests {
     fn set_flexpuff_sends_enable_command() {
         let iqos = Iqos::new(MockTransport::with_responses([]));
 
-        block_on(iqos.set_flexpuff(FlexPuffSetting::new(true)))
+        block_on(iqos.set_flexpuff(DeviceModel::IlumaI, FlexPuffSetting::new(true)))
             .expect("set flexpuff enabled should succeed");
 
         assert_eq!(
@@ -807,7 +820,7 @@ mod tests {
     fn set_flexpuff_sends_disable_command() {
         let iqos = Iqos::new(MockTransport::with_responses([]));
 
-        block_on(iqos.set_flexpuff(FlexPuffSetting::new(false)))
+        block_on(iqos.set_flexpuff(DeviceModel::IlumaIPrime, FlexPuffSetting::new(false)))
             .expect("set flexpuff disabled should succeed");
 
         assert_eq!(
@@ -822,9 +835,34 @@ mod tests {
             "ble error".to_string(),
         ))]));
 
-        let error = block_on(iqos.read_flexpuff()).expect_err("transport error should surface");
+        let error = block_on(iqos.read_flexpuff(DeviceModel::IlumaI))
+            .expect_err("transport error should surface");
 
         assert!(matches!(error, Error::Transport(_)));
+    }
+
+    #[test]
+    fn read_flexpuff_rejects_unsupported_model_without_request() {
+        let iqos = Iqos::new(MockTransport::with_responses([Ok(vec![
+            0x00, 0x90, 0x85, 0x22, 0x03, 0x01, 0x00, 0x00, 0x00,
+        ])]));
+
+        let error = block_on(iqos.read_flexpuff(DeviceModel::Iluma))
+            .expect_err("unsupported model should fail before request");
+
+        assert!(matches!(error, Error::Unsupported(message) if message.contains("FlexPuff")));
+        assert!(iqos.transport().recorded_requests().is_empty());
+    }
+
+    #[test]
+    fn set_flexpuff_rejects_unsupported_model_without_send() {
+        let iqos = Iqos::new(MockTransport::with_responses([]));
+
+        let error = block_on(iqos.set_flexpuff(DeviceModel::Iluma, FlexPuffSetting::new(true)))
+            .expect_err("unsupported model should fail before send");
+
+        assert!(matches!(error, Error::Unsupported(message) if message.contains("FlexPuff")));
+        assert!(iqos.transport().recorded_sends().is_empty());
     }
 
     #[test]
